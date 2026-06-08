@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>問題記錄：Embedding 模型繁中檢索失敗（nomic-embed-text → bge-m3）</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1f2933; --muted: #5c6975;
+    --line: #e3e8ee; --accent: #2563eb; --bad: #c0392b; --good: #1e8e5a;
+    --warn: #b8860b; --code-bg: #f0f2f5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+    line-height: 1.75; font-size: 16px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+  header.title {
+    background: linear-gradient(135deg, #1e293b, #334155);
+    color: #fff; border-radius: 14px; padding: 28px 32px; margin-bottom: 28px;
+  }
+  header.title h1 { margin: 0 0 8px; font-size: 24px; line-height: 1.4; }
+  header.title .meta { color: #cbd5e1; font-size: 14px; }
+  .badge {
+    display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px;
+    border-radius: 999px; background: var(--good); color: #fff; vertical-align: middle;
+  }
+  section.card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 22px 26px; margin-bottom: 20px;
+  }
+  h2 { font-size: 19px; margin: 4px 0 14px; padding-bottom: 8px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 16px; margin: 18px 0 8px; color: var(--accent); }
+  p { margin: 8px 0; }
+  code, .mono {
+    font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+    background: var(--code-bg); padding: 1px 6px; border-radius: 5px; font-size: 14px;
+  }
+  pre {
+    background: #1e293b; color: #e2e8f0; padding: 16px 18px; border-radius: 10px;
+    overflow-x: auto; font-size: 13.5px; line-height: 1.6;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; }
+  th { background: #eef2f7; font-weight: 700; }
+  td.center, th.center { text-align: center; }
+  .ok { color: var(--good); font-weight: 700; }
+  .no { color: var(--bad); font-weight: 700; }
+  .tilde { color: var(--warn); font-weight: 700; }
+  .callout {
+    border-left: 4px solid var(--accent); background: #eff4ff;
+    padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0;
+  }
+  .callout.bad { border-color: var(--bad); background: #fdecea; }
+  .callout.good { border-color: var(--good); background: #e8f6ee; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .muted { color: var(--muted); font-size: 13.5px; }
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="title">
+    <h1>問題記錄：Embedding 模型繁中檢索失敗 <span class="badge">已解決</span></h1>
+    <div class="meta">
+      專案：rag-faq-demo（本地 RAG FAQ Demo）&nbsp;·&nbsp;
+      日期：2026-06-09 &nbsp;·&nbsp;
+      階段：第六節（端到端整合驗證）
+    </div>
+  </header>
+
+  <section class="card">
+    <h2>一、一句話結論</h2>
+    <p>
+      spec 指定的 embedding 模型 <code>nomic-embed-text</code> 在繁體中文「語意改寫式」提問上鑑別力不足，
+      導致關鍵驗收測試檢索失敗。經實證評估後，<strong>正式改用 <code>bge-m3</code>（768 維 → 1024 維）</strong>，
+      命中率自 6/8 提升至 8/8，驗收通過。
+    </p>
+    <div class="callout">
+      這 <strong>不是程式 bug</strong>：向量計算、儲存、pgvector 餘弦檢索邏輯全部正確，問題出在 embedding 模型本身的語意品質。
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>二、問題現象</h2>
+    <p>
+      整套 <code>docker compose up --build</code> 拉起後（三容器運行、<code>/health</code> 全綠、語料 15 筆灌入成功），
+      執行 <code>CLAUDE.md</code> 指定的關鍵驗收測試——
+      問句用詞刻意與原文不同：
+    </p>
+    <ul>
+      <li>原文（員工手冊-請假）：<em>「當年度未休完的<strong>特休假可以遞延</strong>至次年度使用…逾期未休的部分公司將折算工資發給。」</em></li>
+      <li>提問：<em>「沒休完的假會不見嗎?」</em></li>
+    </ul>
+    <p>結果 top-4 檢索<strong>完全沒有撈到</strong>正解段落，反而回傳到職／加班／遠距／健檢，距離全擠在 0.37–0.40，LLM 因此回答「無法回答」。</p>
+    <pre><code>$ curl -s -X POST localhost:8000/ask -d '{"question":"沒休完的假會不見嗎?"}'
+answer: 根據現有資料,我無法回答這個問題。
+sources:
+  [0.3664] 員工手冊-到職   ← 非正解
+  [0.3773] 員工手冊-加班
+  [0.3783] 員工手冊-遠距
+  [0.4007] 福利制度-健檢
+  ( 正解「員工手冊-請假」距離 0.4042,排第 5,擠不進 top-4 )</code></pre>
+  </section>
+
+  <section class="card">
+    <h2>三、排查過程（如何確認非程式問題）</h2>
+    <ol>
+      <li><strong>確認向量儲存正確：</strong>在容器內以 Python 重新計算「到職」段落對該問句的餘弦距離，得 <code>0.3664</code>，
+        與 <code>/ask</code> 回傳值<strong>完全吻合</strong> → 證明 embedding 計算、寫入 DB、pgvector <code>&lt;=&gt;</code> 檢索全鏈路正確且具確定性。</li>
+      <li><strong>否證「缺 task prefix」假設：</strong><code>nomic-embed-text</code> 屬 Nomic 系列，理論上需 <code>search_query:</code> / <code>search_document:</code> 前綴。
+        實測加上前綴後正解 0.4126 仍比干擾項（到職 0.3851）更遠 → <span class="no">前綴無效</span>，排除此因。</li>
+      <li><strong>擴大評估：</strong>對 15 筆語料設計 8 題改寫式提問，量測 top-1 命中率，以判斷是單一難題還是系統性問題。</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>四、評估數據</h2>
+    <p>同一組 8 題、同一份語料，比較三種設定的 top-1 命中：</p>
+    <table>
+      <thead>
+        <tr>
+          <th>提問（改寫）</th>
+          <th>正解來源</th>
+          <th class="center">nomic<br>無前綴</th>
+          <th class="center">nomic<br>有前綴</th>
+          <th class="center">bge-m3</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>沒休完的假會不見嗎?</td><td>請假</td><td class="center no">✗</td><td class="center no">✗</td><td class="center ok">✓</td></tr>
+        <tr><td>加班費怎麼算?</td><td>加班</td><td class="center ok">✓</td><td class="center ok">✓</td><td class="center ok">✓</td></tr>
+        <tr><td>買東西的錢多久要核銷?</td><td>報帳</td><td class="center no">✗</td><td class="center no">✗</td><td class="center ok">✓</td></tr>
+        <tr><td>可以在家上班嗎?</td><td>遠距</td><td class="center ok">✓</td><td class="center ok">✓</td><td class="center ok">✓</td></tr>
+        <tr><td>公司有停車位嗎?</td><td>停車場</td><td class="center ok">✓</td><td class="center ok">✓</td><td class="center ok">✓</td></tr>
+        <tr><td>健康檢查多久一次?</td><td>健檢</td><td class="center ok">✓</td><td class="center ok">✓</td><td class="center ok">✓</td></tr>
+        <tr><td>過年會發獎金嗎?</td><td>年終</td><td class="center ok">✓</td><td class="center ok">✓</td><td class="center ok">✓</td></tr>
+        <tr><td>可以把公司檔案寄到我的 gmail 嗎?</td><td>資安</td><td class="center ok">✓</td><td class="center ok">✓</td><td class="center ok">✓</td></tr>
+        <tr>
+          <th>top-1 命中率</th><th></th>
+          <th class="center no">6 / 8</th>
+          <th class="center no">6 / 8</th>
+          <th class="center ok">8 / 8</th>
+        </tr>
+      </tbody>
+    </table>
+    <p class="muted">符號：✓ = top-1 即正解。nomic 失敗的兩題正是改寫幅度最大者，且其一為 spec 的關鍵驗收題。</p>
+  </section>
+
+  <section class="card">
+    <h2>五、根因</h2>
+    <p>
+      <code>nomic-embed-text</code> 對繁體中文的語意鑑別力偏弱：所有距離被壓縮在狹窄區間（約 0.37–0.41），
+      使得「語意對但用詞不同」的正解段落，無法與表面字詞接近的干擾段落拉開差距。
+      這是<strong>模型能力上限</strong>，非任何前綴、參數或程式可調整修正。
+      <code>bge-m3</code> 為多語／中文檢索強化模型，在相同語料上能把正解明顯拉前（驗收題 top-1 距離 0.3465，與次名 0.4197 拉開）。
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>六、決策與修正</h2>
+    <div class="callout good">
+      決策：將 embedding 模型自 <code>nomic-embed-text</code>(768 維) 改為 <code>bge-m3</code>(1024 維)。經使用者核准，並以「先實測再決定」流程取得實證後執行。
+    </div>
+    <h3>實際變更</h3>
+    <table>
+      <thead><tr><th>檔案 / 項目</th><th>變更</th></tr></thead>
+      <tbody>
+        <tr><td><code>backend/ollama_client.py</code></td><td><code>EMBED_MODEL</code> 預設 <code>nomic-embed-text</code> → <code>bge-m3</code></td></tr>
+        <tr><td><code>backend/db.py</code></td><td>維度改為可由環境變數控制：<code>EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM","1024"))</code></td></tr>
+        <tr><td><code>docker-compose.yml</code></td><td>backend 加入 <code>EMBED_MODEL=bge-m3</code>、<code>EMBEDDING_DIM=1024</code></td></tr>
+        <tr><td><code>.env.example</code></td><td>同步預設值與註解</td></tr>
+        <tr><td>DB</td><td><code>DROP TABLE docs</code> → 以新維度重建 → <code>seed_data.py</code> 重灌 15 筆</td></tr>
+        <tr><td>文件</td><td><code>README.md</code> / <code>BUILD_PROMPT.md</code> / <code>CLAUDE.md</code> 內 768/nomic 字樣同步更新</td></tr>
+      </tbody>
+    </table>
+    <div class="callout bad">
+      注意：更換 embedding 模型時，維度（<code>EMBEDDING_DIM</code>）必須同步調整，且<strong>務必 DROP 並重建 <code>docs</code> 表再重灌</strong>，
+      否則維度不符會導致寫入失敗，或新舊向量混在同一表中無法比對。
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>七、驗收結果（修正後）</h2>
+    <pre><code>$ curl -s -X POST localhost:8000/ask -d '{"question":"沒休完的假會不見嗎?"}'
+answer: …特休假可以遞延至次年度使用,但需在次年度結束前休畢,
+        逾期未休的部分公司將折算工資發給。(來源:員工手冊-請假)
+sources:
+  [0.3465] 員工手冊-請假   ← 正解,top-1
+  [0.4197] 員工手冊-病假
+  [0.4960] 員工手冊-到職
+  [0.5060] 員工手冊-離職</code></pre>
+    <table>
+      <thead><tr><th>驗收項</th><th class="center">結果</th></tr></thead>
+      <tbody>
+        <tr><td>三容器運行（db / backend / frontend）</td><td class="center ok">✓</td></tr>
+        <tr><td><code>/health</code> → <code>{status:ok, db:true, ollama:true}</code></td><td class="center ok">✓</td></tr>
+        <tr><td>語料灌入 15 筆（1024 維）</td><td class="center ok">✓</td></tr>
+        <tr><td>關鍵驗收題 top-1 = 員工手冊-請假，答案正確並標出處</td><td class="center ok">✓</td></tr>
+        <tr><td><code>ollama ps</code> PROCESSOR：qwen2.5:7b 與 bge-m3 皆 100% GPU</td><td class="center ok">✓</td></tr>
+        <tr><td>前端可達（HTTP 200）</td><td class="center ok">✓</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>八、學到的事</h2>
+    <ul>
+      <li>RAG demo 的成敗高度取決於 <strong>embedding 模型對目標語言的品質</strong>，繁中尤其要慎選，不能只看模型大小或下載量。</li>
+      <li>排查時先用「重算距離 vs 線上回傳值比對」快速區分<strong>程式問題</strong>與<strong>模型問題</strong>，避免在程式碼裡空轉。</li>
+      <li>對 embedding 行為的假設（如 task prefix）要<strong>實測否證</strong>，不要照搬慣例直接改。</li>
+      <li>把維度做成環境變數（<code>EMBEDDING_DIM</code>），日後換模型只需改 env + 重建表，降低耦合。</li>
+    </ul>
+  </section>
+
+  <footer>
+    本文件依專案規範「說明文件一律以 HTML 呈現」產出，可直接用瀏覽器開啟閱讀。
+  </footer>
+
+</div>
+</body>
+</html>

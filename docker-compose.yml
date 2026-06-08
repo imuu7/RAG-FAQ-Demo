@@ -1,0 +1,44 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ragpass
+      POSTGRES_DB: ragdb
+    ports:
+      - "5432:5432" # 方便用 psql/DBeaver 連入除錯;不需對外可拿掉
+    volumes:
+      - pgdata:/var/lib/postgresql/data # 資料持久化,重啟不掉
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d ragdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy # 等 DB 健康再啟動,init_db() 不會撞上未就緒的 PG
+    environment:
+      DATABASE_URL: postgresql://rag:ragpass@db:5432/ragdb # 容器間用服務名 db 當 host
+      OLLAMA_HOST: http://host.docker.internal:11434 # 連 WSL 主機上的 Ollama
+      EMBED_MODEL: bge-m3 # 繁中檢索品質較佳;與 EMBEDDING_DIM 對應
+      EMBEDDING_DIM: "1024" # bge-m3 為 1024 維(nomic-embed-text 則為 768)
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Linux Docker Engine 也支援
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    environment:
+      # 容器內 localhost 連不到 backend 容器,代理目標需指向服務名 backend
+      VITE_PROXY_TARGET: http://backend:8000
+    ports:
+      - "5173:5173"
+
+volumes:
+  pgdata:
