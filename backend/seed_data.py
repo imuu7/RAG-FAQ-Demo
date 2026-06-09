@@ -1,5 +1,6 @@
-"""灌入示範 FAQ 語料:逐條算 embedding 後 INSERT。
+"""灌入示範語料:游永慶的履歷與工作經歷,逐條算 embedding 後 INSERT。
 
+把履歷切成細粒度片段(每筆一個重點,利於檢索),每筆 {content, source}。
 可獨立執行:python seed_data.py
 重跑前會先清空 docs,避免重複資料。
 """
@@ -8,67 +9,86 @@ from db import get_conn, init_db
 from ollama_client import embed
 from rag import _to_vector_literal
 
-# 10–20 條繁中 FAQ;source 為出處標籤,content 為原文
-FAQS: list[dict] = [
+# 語料 = 履歷與工作經歷;source 為出處標籤,content 為原文片段
+DOCS: list[dict] = [
+    # 個人簡介
     {
-        "source": "員工手冊-請假",
-        "content": "當年度未休完的特休假可以遞延至次年度使用,但需在次年度結束前休畢,逾期未休的部分公司將折算工資發給。",
+        "source": "個人簡介",
+        "content": "游永慶,全端工程師,約 5 年開發經驗。前端以 Angular(RxJS、TypeScript)為主力,擅長元件化架構、SPA 與響應式設計,同時具備紮實的後端與資料庫實戰。",
+    },
+
+    # 工作經歷 — 鼎漢國際(2022/8–2025/9,資訊分析師,實際擔任全端)
+    {
+        "source": "鼎漢國際 · 專案概述",
+        "content": "在鼎漢國際工程顧問,獨立負責整個縣市政府標案的交通數據分析平台,從 Angular 前端、Python Flask API 到 PostgreSQL 資料庫,從需求到上線一手交付。",
     },
     {
-        "source": "員工手冊-加班",
-        "content": "平日加班前兩小時以時薪 1.34 倍計算,第三小時起以 1.67 倍計算;休息日加班另有更高倍率,實際以勞基法規定為準。",
+        "source": "鼎漢國際 · 資料庫效能優化",
+        "content": "設計 PostgreSQL 索引與資料分區(Partitioning)策略,處理數百台設備、每 5 秒一筆、保存 2 年、累積數十億筆的時序資料,將核心報表查詢從 900 秒優化至 60 秒,約提速 15 倍。",
     },
     {
-        "source": "財務制度-報帳",
-        "content": "報帳流程為:於差旅或採購後 14 天內,在報帳系統填寫單據並上傳發票,經主管簽核後送財務,財務審核通過約 7 個工作天內撥款至薪資帳戶。",
+        "source": "鼎漢國際 · Redis 快取",
+        "content": "導入 Redis 作為快取與訊息佇列,降低熱點查詢對資料庫的負載,改善高併發情境下的 API 回應速度與服務穩定性。",
     },
     {
-        "source": "行政公告-停車場",
-        "content": "公司地下停車場開放時間為週一至週五上午 7 點至晚上 10 點,假日不開放。員工需申請車證並感應進出,訪客請於一樓櫃台登記。",
+        "source": "鼎漢國際 · API 與推播",
+        "content": "以 Python Flask(Service Layer 架構)打造 RESTful API,並串接 LINE Messaging API 做系統異常即時推播,讓團隊第一時間掌握異常。",
     },
     {
-        "source": "員工手冊-到職",
-        "content": "新進員工試用期為三個月,試用期間享有勞健保與特休按比例計算,試用期通過後年資自到職日起算。",
+        "source": "鼎漢國際 · Docker 自動化部署",
+        "content": "在 Proxmox 虛擬化環境用 Docker + Shell Script 建立自動化部署流程,將每次上線時間從 20 分鐘縮短到 2 分鐘,降低約 90% 並減少部署失誤。",
     },
     {
-        "source": "資訊安全政策",
-        "content": "公司筆電一律須開啟硬碟加密與螢幕鎖定,密碼至少 12 碼且每 90 天更換一次,嚴禁將公司機密資料上傳至個人雲端硬碟。",
+        "source": "鼎漢國際 · Angular 前端",
+        "content": "以 Angular(元件化架構 + RxJS + TypeScript)開發分析平台前端,搭配 Lazy Loading 路由切分模組與按需載入,改善首屏載入速度與程式碼可維護性。",
+    },
+
+    # 工作經歷 — 福興數位(2025/9–2025/12,PHP 後端)
+    {
+        "source": "福興數位 · 概述",
+        "content": "在福興數位以短期專案合作,負責 Laravel 後端 API 開發與多雲基礎設施維運。",
     },
     {
-        "source": "福利制度-健檢",
-        "content": "公司每年提供一次免費健康檢查,滿 40 歲員工加做進階項目。健檢預約由人資統一發信,員工可於指定合作醫院自選時段。",
+        "source": "福興數位 · 多雲 CDN",
+        "content": "規劃並部署多雲 CDN 架構(AWS CloudFront、華為、騰訊),優化回源與快取規則,將源站流量降低約 95%。",
     },
     {
-        "source": "員工手冊-遠距",
-        "content": "全職員工每週最多可申請兩天遠距工作,需事先於系統提出並經主管核准;遠距期間仍須維持正常上線時間與即時回覆。",
+        "source": "福興數位 · 快取與佇列",
+        "content": "導入 Redis 快取(含 TTL 過期策略)與 Laravel Queue 非同步處理,減輕資料庫負載並提升吞吐量。",
     },
     {
-        "source": "福利制度-年終",
-        "content": "年終獎金依公司營運狀況與個人考績發放,通常於農曆年前一週隨一月薪資匯入,計算基準為本薪而非含津貼的月總額。",
+        "source": "福興數位 · Nginx 與資安",
+        "content": "建置 Nginx 反向代理並導入 Cloudflare WAF、訪問控制與 HTTPS 憑證,完成域名/DNS 切換與線路遷移。",
+    },
+
+    # 工作經歷 — 向邑數位(2020/12–2022/1,專案開發)
+    {
+        "source": "向邑數位 · 前端接案",
+        "content": "在向邑數位接案,最多同時並行約 4 個客戶專案。前端使用 Vue.js、React、Next.js、jQuery、Tailwind CSS,依需求快速切換技術棧並準時交付。",
     },
     {
-        "source": "行政公告-會議室",
-        "content": "會議室採線上系統預約,單次最長兩小時,逾時未報到 15 分鐘系統將自動釋出。大型會議室(可容納 20 人以上)需主管層級帳號才能預約。",
+        "source": "向邑數位 · 後端與爬蟲",
+        "content": "以 Laravel 建構後端 API;用 Python 開發爬蟲蒐集 IG/Twitter、歷史股價、地籍與電商資料;串接 LINE Messaging API 開發 LineBot(Rich Menu、LIFF)。",
+    },
+
+    # 技術棧
+    {
+        "source": "技術棧 · 語言與前端",
+        "content": "主力程式語言為 PHP、Python、TypeScript;前端以 Angular、RxJS 為主力,熟悉 Vue.js、React,曾用 Next.js、jQuery。",
     },
     {
-        "source": "員工手冊-離職",
-        "content": "員工離職須於離職日前依年資提前提出書面申請:未滿一年提前十日、一年以上三年未滿提前二十日、三年以上提前三十日,並完成工作交接與資產歸還。",
+        "source": "技術棧 · 後端與資料庫",
+        "content": "後端框架 Laravel、Flask;資料庫主力 PostgreSQL、Redis、SQLAlchemy,熟悉 MySQL、MariaDB。",
     },
     {
-        "source": "福利制度-教育訓練",
-        "content": "公司提供每人每年最高三萬元的教育訓練補助,可用於與職務相關的課程或證照考試,需檢附完訓證明與收據向人資申請核銷。",
+        "source": "技術棧 · 雲端與部署",
+        "content": "雲端與部署:Nginx、Docker、Docker Compose、Shell Script,接觸過 Proxmox、AWS CloudFront、Cloudflare、AWS S3。",
     },
+
+    # 學歷
     {
-        "source": "行政公告-郵件收發",
-        "content": "公司包裹與掛號信件由一樓收發室代收,到件後系統會發通知信,員工請於三個工作天內領取,逾期未領的私人包裹收發室不負保管責任。",
-    },
-    {
-        "source": "員工手冊-病假",
-        "content": "普通傷病假一年內未超過三十日部分,工資折半發給;住院傷病假與普通傷病假合計兩年內不得超過一年。請病假超過三日須檢附診斷證明。",
-    },
-    {
-        "source": "資訊服務-帳號",
-        "content": "忘記公司系統密碼可至內部 IT 服務入口自助重設,或撥打分機 8000 由 IT 協助;連續輸入錯誤五次帳號將鎖定 30 分鐘。",
+        "source": "學歷",
+        "content": "國立高雄第一科技大學 資訊管理學系 學士(2016–2020)。",
     },
 ]
 
@@ -79,17 +99,17 @@ def seed() -> None:
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("TRUNCATE docs RESTART IDENTITY;")
-        for i, faq in enumerate(FAQS, 1):
-            vec = embed(faq["content"])
+        for i, doc in enumerate(DOCS, 1):
+            vec = embed(doc["content"])
             cur.execute(
                 "INSERT INTO docs (content, source, embedding) "
                 "VALUES (%s, %s, %s::vector);",
-                (faq["content"], faq["source"], _to_vector_literal(vec)),
+                (doc["content"], doc["source"], _to_vector_literal(vec)),
             )
-            print(f"  [{i}/{len(FAQS)}] 已灌入:{faq['source']}")
+            print(f"  [{i}/{len(DOCS)}] 已灌入:{doc['source']}")
         conn.commit()
 
-    print(f"完成,共灌入 {len(FAQS)} 條 FAQ。")
+    print(f"完成,共灌入 {len(DOCS)} 筆履歷語料。")
 
 
 if __name__ == "__main__":

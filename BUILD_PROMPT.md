@@ -1,4 +1,4 @@
-# Prompt:建構並部署 RAG 智慧問答全端 Demo(B 案 — 全程 WSL2 + NVIDIA GPU)
+# Prompt:建構並部署「與我的履歷對話」RAG 問答機器人(B 案 — 全程 WSL2 + NVIDIA GPU)
 
 > 用途:在 **WSL2(Ubuntu)** 裡、於 `~/rag-faq-demo` 開啟一個**全新 Claude Code session**,把以下整段內容貼進去即可從零建構並在本地(WSL)跑起整個專案。所有元件都跑在 WSL2,Ollama 透過 **NVIDIA RTX 4070 SUPER** 的 CUDA 加速。
 >
@@ -8,9 +8,11 @@
 
 ## 一、目標
 
-在 WSL2 的 `~/rag-faq-demo`(全新獨立資料夾,將作為新的 Git repo)建立一個**小而完整、本地可一鍵跑起**的全端 RAG(檢索增強生成)問答應用。
+在 WSL2 的 `~/rag-faq-demo`(全新獨立資料夾,將作為新的 Git repo)建立一個**小而完整、本地可一鍵跑起**的全端 **「與我的履歷對話」問答機器人**:把「游永慶」的履歷與工作經歷做成語料,訪客(例如招募方)用自然語言詢問他的技能與經歷,系統以 RAG 撈出最相關的經歷片段、生成答案並附出處。
 
-流程:使用者輸入問題 → 後端把問題轉成向量 → 用 pgvector 從文件庫找出語意最相近的段落 → 連同問題交給本地 LLM 生成答案 → 回傳「**答案 + 檢索到的來源段落與相似度分數**」。前端顯示答案並列出來源,證明這是真正的 RAG,而非單純聊天機器人。
+流程:使用者輸入問題 → 後端把問題轉成向量 → 用 pgvector 從**履歷語料庫**找出語意最相近的段落 → 連同問題交給本地 LLM 生成答案 → 回傳「**答案 + 檢索到的來源段落與相似度分數**」。前端顯示答案並列出來源,證明這是真正的 RAG,而非單純聊天機器人。
+
+> 主題亮點:這個 demo 本身就是一份**互動式作品集**——招募方玩 demo 時,玩的就是「認識這個人」。語意搜尋的價值也很明顯:對方用自己的話問,履歷用不同詞寫,正好展示語意檢索勝過關鍵字。
 
 ## 二、技術棧
 
@@ -19,7 +21,7 @@
 | 前端 | React + Vite + TypeScript | API 回應以 interface 定義型別 |
 | 後端 | Python FastAPI | 自帶 OpenAPI 文件(`/docs`) |
 | 資料庫 | PostgreSQL 16 + pgvector | 官方映像 `pgvector/pgvector:pg16` |
-| Embedding | Ollama `bge-m3`(1024 維,約 0.66GB) | 本地、免費;繁中檢索品質佳(原採 `nomic-embed-text` 768 維,因繁中語意鑑別力不足而改用,詳見 `docs/issue-embedding-zh.html`) |
+| Embedding | Ollama `nomic-embed-text`(768 維,約 0.3GB) | 本地、免費 |
 | LLM 生成 | Ollama `qwen2.5:7b`(Q4 約 4.7GB) | 繁中佳;12GB VRAM 跑得順。想更省可改 `3b`,想更好品質可試 `14b`(約 9GB,較緊) |
 | 編排 | Docker Compose | 在 WSL2 內的 Docker Engine 上跑 |
 | 執行環境 | **WSL2(Ubuntu)** | 三個容器 + Ollama 全部跑在 WSL2,Ollama 吃 GPU |
@@ -38,7 +40,7 @@
 5. **在 WSL 內裝 Ollama**:`curl -fsSL https://ollama.com/install.sh | sh`。
 6. **讓 Ollama 對容器開放並 pull 模型**:
    - 以 `OLLAMA_HOST=0.0.0.0 ollama serve` 啟動;或 `sudo systemctl edit ollama` 加一行 `Environment="OLLAMA_HOST=0.0.0.0"` 後 `sudo systemctl restart ollama`。**沒綁 0.0.0.0 容器會連不到**(預設只聽 127.0.0.1)。
-   - `ollama pull bge-m3`
+   - `ollama pull nomic-embed-text`
    - `ollama pull qwen2.5:7b`
    - `ollama list` 確認兩者都在。
 
@@ -81,12 +83,12 @@ CREATE TABLE IF NOT EXISTS docs (
   id        serial PRIMARY KEY,
   content   text NOT NULL,
   source    text,                 -- 來源標籤(哪份文件/哪一條),供前端顯示出處
-  embedding vector(1024)          -- bge-m3 維度(維度由 EMBEDDING_DIM 控制)
+  embedding vector(768)           -- nomic-embed-text 維度
 );
 ```
 
 ### 2. Ollama 用戶端(`backend/ollama_client.py`)
-- `embed(text) -> list[float]`:`POST {OLLAMA_HOST}/api/embeddings`,body `{"model":"bge-m3","prompt": text}`,回傳 `embedding`。模型名由 `EMBED_MODEL` 環境變數控制。
+- `embed(text) -> list[float]`:`POST {OLLAMA_HOST}/api/embeddings`,body `{"model":"nomic-embed-text","prompt": text}`,回傳 `embedding`。
 - `generate(prompt) -> str`:`POST {OLLAMA_HOST}/api/generate`,body `{"model":"qwen2.5:7b","prompt": prompt,"stream": false}`,回傳 `response`。
 - `OLLAMA_HOST` 由環境變數讀取,容器內預設 `http://host.docker.internal:11434`(若後端改成原生在 WSL 跑,改用 `http://localhost:11434`)。
 
@@ -97,7 +99,7 @@ CREATE TABLE IF NOT EXISTS docs (
   FROM docs ORDER BY distance LIMIT %s;
   ```
   (`<=>` = 餘弦距離,越小越相近)
-- `build_prompt(question, contexts)`:把 top-k 原文組成 context 區塊,指示 LLM **只根據提供內容作答、並標註出處,找不到就說不知道**。
+- `build_prompt(question, contexts)`:把 top-k 履歷片段組成 context 區塊,指示 LLM **扮演「游永慶的履歷問答助手」,用繁體中文、只根據提供的履歷內容回答關於他技能與經歷的問題;履歷未提到的就說「履歷未提及」、不要編造**,並標註出處。
 
 ### 4. 後端路由(`backend/main.py`)
 - 掛 `CORSMiddleware`,允許前端來源(`http://localhost:5173`)。
@@ -108,8 +110,43 @@ CREATE TABLE IF NOT EXISTS docs (
 - `GET /health` → 確認 DB 與 Ollama 連線狀態(demo 時好用)。
 - 啟動時呼叫 `init_db()`。
 
-### 5. 示範語料(`backend/seed_data.py`)
-準備 **10–20 條繁中 FAQ**(例:特休遞延、加班費計算、報帳流程、停車場開放時間…),逐條 `embed()` 後 INSERT。可獨立執行:`python seed_data.py`。
+### 5. 示範語料(`backend/seed_data.py`)——語料 = 我的履歷與工作經歷
+
+把履歷切成**細粒度片段**(每筆一個重點,利於檢索),每筆 `{content, source}`,逐筆 `embed()` 後 INSERT。可獨立執行 `python seed_data.py`。以下為**現成種子內容**(取自本人 `resume.html`,可直接用):
+
+```python
+DOCS = [
+    # 個人簡介
+    {"source": "個人簡介", "content": "游永慶,全端工程師,約 5 年開發經驗。前端以 Angular(RxJS、TypeScript)為主力,擅長元件化架構、SPA 與響應式設計,同時具備紮實的後端與資料庫實戰。"},
+
+    # 工作經歷 — 鼎漢國際(2022/8–2025/9,資訊分析師,實際擔任全端)
+    {"source": "鼎漢國際 · 專案概述", "content": "在鼎漢國際工程顧問,獨立負責整個縣市政府標案的交通數據分析平台,從 Angular 前端、Python Flask API 到 PostgreSQL 資料庫,從需求到上線一手交付。"},
+    {"source": "鼎漢國際 · 資料庫效能優化", "content": "設計 PostgreSQL 索引與資料分區(Partitioning)策略,處理數百台設備、每 5 秒一筆、保存 2 年、累積數十億筆的時序資料,將核心報表查詢從 900 秒優化至 60 秒,約提速 15 倍。"},
+    {"source": "鼎漢國際 · Redis 快取", "content": "導入 Redis 作為快取與訊息佇列,降低熱點查詢對資料庫的負載,改善高併發情境下的 API 回應速度與服務穩定性。"},
+    {"source": "鼎漢國際 · API 與推播", "content": "以 Python Flask(Service Layer 架構)打造 RESTful API,並串接 LINE Messaging API 做系統異常即時推播,讓團隊第一時間掌握異常。"},
+    {"source": "鼎漢國際 · Docker 自動化部署", "content": "在 Proxmox 虛擬化環境用 Docker + Shell Script 建立自動化部署流程,將每次上線時間從 20 分鐘縮短到 2 分鐘,降低約 90% 並減少部署失誤。"},
+    {"source": "鼎漢國際 · Angular 前端", "content": "以 Angular(元件化架構 + RxJS + TypeScript)開發分析平台前端,搭配 Lazy Loading 路由切分模組與按需載入,改善首屏載入速度與程式碼可維護性。"},
+
+    # 工作經歷 — 福興數位(2025/9–2025/12,PHP 後端)
+    {"source": "福興數位 · 概述", "content": "在福興數位以短期專案合作,負責 Laravel 後端 API 開發與多雲基礎設施維運。"},
+    {"source": "福興數位 · 多雲 CDN", "content": "規劃並部署多雲 CDN 架構(AWS CloudFront、華為、騰訊),優化回源與快取規則,將源站流量降低約 95%。"},
+    {"source": "福興數位 · 快取與佇列", "content": "導入 Redis 快取(含 TTL 過期策略)與 Laravel Queue 非同步處理,減輕資料庫負載並提升吞吐量。"},
+    {"source": "福興數位 · Nginx 與資安", "content": "建置 Nginx 反向代理並導入 Cloudflare WAF、訪問控制與 HTTPS 憑證,完成域名/DNS 切換與線路遷移。"},
+
+    # 工作經歷 — 向邑數位(2020/12–2022/1,專案開發)
+    {"source": "向邑數位 · 前端接案", "content": "在向邑數位接案,最多同時並行約 4 個客戶專案。前端使用 Vue.js、React、Next.js、jQuery、Tailwind CSS,依需求快速切換技術棧並準時交付。"},
+    {"source": "向邑數位 · 後端與爬蟲", "content": "以 Laravel 建構後端 API;用 Python 開發爬蟲蒐集 IG/Twitter、歷史股價、地籍與電商資料;串接 LINE Messaging API 開發 LineBot(Rich Menu、LIFF)。"},
+
+    # 技術棧
+    {"source": "技術棧 · 語言與前端", "content": "主力程式語言為 PHP、Python、TypeScript;前端以 Angular、RxJS 為主力,熟悉 Vue.js、React,曾用 Next.js、jQuery。"},
+    {"source": "技術棧 · 後端與資料庫", "content": "後端框架 Laravel、Flask;資料庫主力 PostgreSQL、Redis、SQLAlchemy,熟悉 MySQL、MariaDB。"},
+    {"source": "技術棧 · 雲端與部署", "content": "雲端與部署:Nginx、Docker、Docker Compose、Shell Script,接觸過 Proxmox、AWS CloudFront、Cloudflare、AWS S3。"},
+
+    # 學歷
+    {"source": "學歷", "content": "國立高雄第一科技大學 資訊管理學系 學士(2016–2020)。"},
+]
+```
+> 想擴充,可把 `interview-prep.html` 的問答重點(各專案細節、團隊協作經驗等)再加成更多片段。
 
 ### 6. 前端(`frontend/src/`)
 - `api.ts`:定義 `AskResponse` interface(`answer`、`sources[]`),`askQuestion(question)` 以 `fetch` 打 `POST /ask`。
@@ -174,11 +211,52 @@ backend:
 docker compose exec db psql -U rag -d ragdb
 # 進到 psql 後:
 \dx                 -- 應看到 vector 擴充已安裝
-\d docs             -- 應看到 docs 表,embedding 欄型別為 vector(1024)
+\d docs             -- 應看到 docs 表,embedding 欄型別為 vector(768)
 SELECT count(*) FROM docs;
 \q
 ```
 > 機密提醒:`POSTGRES_PASSWORD` 這類值正式上應放 `.env`(已被 `.gitignore` 排除),範例值僅供本地。
+
+### 9. 進階展示功能 A:關鍵字 vs 語意搜尋對比(最能證明 RAG 價值)
+
+目的:同一個問題,並排呈現**傳統關鍵字搜尋** vs **pgvector 語意搜尋**,讓訪客一眼看到「語意撈得到、關鍵字撈不到」。
+
+**後端**:新增 `POST /compare { question }`,回傳兩組檢索結果(**不經 LLM,純比較**):
+```python
+# 關鍵字搜尋:把問題拆成詞,用 ILIKE 任一比對(繁中不需斷詞器,子字串比對最穩)
+#   SELECT content, source FROM docs
+#   WHERE content ILIKE ANY(%s)        -- %s = ['%詞1%','%詞2%', ...]
+#   LIMIT 4;
+# 語意搜尋:沿用 retrieve(),embedding <=> 問題向量 ORDER BY distance LIMIT 4
+```
+回傳:
+```json
+{
+  "keyword":  [{"source": "...", "content": "..."}],
+  "semantic": [{"source": "...", "content": "...", "distance": 0.12}]
+}
+```
+**前端**:一個「搜尋對比」頁籤(或並排兩欄,左=關鍵字、右=語意),同一問題同時送。**示範問句**:問「**他會帶團隊嗎?**」「**做過雲端嗎?**」這種用詞跟履歷不同的問題——關鍵字欄常常空白或不相關,語意欄正確撈出對應經歷。
+
+> 為什麼用 `ILIKE` 而非全文檢索:繁中要做 `to_tsvector` 需斷詞器(如 pg_jieba),週末版用 `ILIKE` 子字串比對即可,而且「關鍵字撈不到、語意撈得到」的對比反而更鮮明。
+
+### 10. 進階展示功能 B:串流回答(逐字輸出,體感像 ChatGPT)
+
+目的:答案逐字浮現,而非等整段生成完才出現。
+
+**後端**:新增 `POST /ask/stream`,流程同 `/ask`,但把生成段改成串流:
+```python
+# 1) 先 embed + retrieve 取得 sources(串流前就已確定)
+# 2) 呼叫 Ollama generate 時 body 加 "stream": true,
+#    用 httpx.AsyncClient.stream 逐行讀 NDJSON,取每行的 "response" 增量
+# 3) 以 FastAPI StreamingResponse(media_type="text/event-stream")回傳 SSE:
+#    先送一筆 sources 事件(整包 JSON)→ 再逐 token 送 → 最後送 done
+```
+要點:`sources` 在 retrieve 後就確定,**先送 sources、再串答案 token**,前端可立刻顯示來源、答案再逐字補上。
+
+**前端**:用 `fetch` + `ReadableStream`(或 `EventSource`)讀 SSE——收到 `sources` 先渲染 SourcePanel,收到 `token` 就 append 到答案區。保留原本非串流的 `/ask` 當 fallback。
+
+> Ollama 串流格式:`/api/generate` 設 `"stream": true` 時回傳多行 JSON,每行有 `response`(該段文字)與 `done`(布林)。後端把這些 `response` 轉發即可。
 
 ## ★ WSL 三大注意事項(務必遵守)
 
@@ -241,8 +319,8 @@ CREATE INDEX ON docs USING hnsw (embedding vector_cosine_ops);
 ## 九、完成驗收(end-to-end)
 
 1. WSL 內 `nvidia-smi` 列出 **RTX 4070 SUPER(約 12282 MiB)**。
-2. `ollama list` 顯示 `bge-m3` 與 `qwen2.5:7b`;問一題後 `ollama ps` 的 **PROCESSOR 欄顯示 GPU**(代表確實用到顯卡,而非 CPU)。
+2. `ollama list` 顯示 `nomic-embed-text` 與 `qwen2.5:7b`;問一題後 `ollama ps` 的 **PROCESSOR 欄顯示 GPU**(代表確實用到顯卡,而非 CPU)。
 3. `docker compose up --build` 後三個容器正常運作;`curl http://localhost:8000/health` 回 DB 與 Ollama 皆 OK。
 4. `docker compose exec backend python seed_data.py` 後,`SELECT count(*) FROM docs` 有資料且 `embedding` 非空。
-5. 前端問一個**用詞與原文不同**的問題(例:原文「特休假可遞延」,問「沒休完的假會不見嗎?」)→ 撈出正確段落、生成正確答案,SourcePanel 顯示來源與距離分數。
+5. 前端問一個**招募方式、用詞與原文不同**的問題(例:履歷寫「將報表查詢從 900 秒優化至 60 秒」,問「他有資料庫效能調校的經驗嗎?」)→ 撈出該段經歷、生成正確答案,SourcePanel 顯示來源(如「鼎漢國際 · 資料庫效能優化」)與距離分數。
 6.(加分項)psql 跑 `EXPLAIN ANALYZE SELECT ... ORDER BY embedding <=> ...`,對比建 HNSW 索引前後的執行計畫。

@@ -1,9 +1,10 @@
-# RAG 智慧問答全端 Demo(WSL2 + NVIDIA GPU)
+# 與我的履歷對話 · RAG 問答機器人(WSL2 + NVIDIA GPU)
 
-一個小而完整、本地可一鍵跑起的全端 **RAG(檢索增強生成)** 問答應用。
-使用者問問題 → 後端把問題轉成向量 → 用 pgvector 從 FAQ 文件庫找出語意最相近的段落 → 連同問題交給本地 LLM 生成答案 → 回傳「**答案 + 檢索到的來源段落與相似度分數**」。前端同時顯示答案與來源,證明這是真正的 RAG,而非單純聊天機器人。
+一個小而完整、本地可一鍵跑起的全端 **RAG(檢索增強生成)** 問答應用,主題是「與游永慶的履歷對話」。
+訪客(例如招募方)用自然語言詢問他的技能與經歷 → 後端把問題轉成向量 → 用 pgvector 從**履歷語料庫**找出語意最相近的段落 → 連同問題交給本地 LLM 生成答案 → 回傳「**答案 + 檢索到的來源段落與相似度分數**」。前端同時顯示答案與來源,證明這是真正的 RAG,而非單純聊天機器人。
 
-語料為繁體中文企業 FAQ(特休遞延、加班費、報帳流程、停車場時間…)。
+語料為繁體中文的履歷與工作經歷片段(個人簡介、鼎漢國際、福興數位、向邑數位、技術棧、學歷)。
+這個 demo 本身就是一份**互動式作品集**:對方用自己的話問、履歷用不同詞寫,正好展示語意檢索勝過關鍵字。
 
 ## 架構
 
@@ -43,10 +44,19 @@
 
 單一資料表 `docs(id, content, source, embedding vector(1024))`。檢索用餘弦距離運算子 `<=>`(`ORDER BY embedding <=> $query LIMIT k`,預設 k=4),距離越小越相近。`init_db()` 啟動時跑 `CREATE EXTENSION IF NOT EXISTS vector`。
 
+### 功能
+
+1. **履歷問答(串流)** — 答案逐字浮現(SSE),下方附上實際檢索到的履歷段落與相似度。
+2. **搜尋對比** — 同一問題並排呈現「傳統關鍵字搜尋(ILIKE)」vs「pgvector 語意搜尋」,凸顯語意檢索能撈到、關鍵字撈不到。
+
 ### API 契約
 
 - `POST /ask { "question": "..." }` → `{ "answer": "...", "sources": [{ "content", "source", "distance" }] }`
   pipeline:`embed(question)` → `retrieve()` → `build_prompt()` → `generate()`。
+- `POST /ask/stream { "question": "..." }` → SSE 串流(`text/event-stream`)。
+  先送一筆 `sources` 事件(整包 JSON),再逐 `token` 事件串答案,最後送 `done`;失敗送 `error`。流程同 `/ask`,只把生成段改成串流。
+- `POST /compare { "question": "..." }` → `{ "keyword": [{content, source}], "semantic": [{content, source, distance}] }`
+  純檢索對照,**不經 LLM**。關鍵字用逐字 ILIKE 子字串比對,語意沿用向量檢索。
 - `GET /health` → 回 DB 與 Ollama 連線狀態。
 
 ## 前置需求(WSL2 內)
@@ -71,12 +81,15 @@ ollama pull bge-m3 && ollama pull qwen2.5:7b
 # 1. 拉起整套(db → backend → frontend)
 docker compose up --build          # 加 -d 可背景執行
 
-# 2. 灌入示範 FAQ 語料(容器起來後)
+# 2. 灌入履歷語料(容器起來後)
 docker compose exec backend python seed_data.py
 
 # 3. 健康檢查
 curl http://localhost:8000/health
 ```
+
+> 改了 `backend/` 或 `frontend/` 的程式碼後,因 Dockerfile 是把程式碼 COPY 進映像(無 bind-mount),需重建:
+> `docker compose up -d --build backend frontend`。
 
 開瀏覽器(Windows 可直接連,WSL2 會自動轉發 localhost):
 
@@ -85,17 +98,19 @@ curl http://localhost:8000/health
 
 ## 驗證 RAG 真的有效
 
-關鍵驗收:問一個**用詞與原文不同**的問題,確認仍能撈到正確段落。
+關鍵驗收:問一個**用詞與履歷不同**的問題,確認仍能撈到正確段落。
 
-> 原文:「未休完的特休假可以遞延至次年度使用…」
-> 提問:「沒休完的假會不見嗎?」
+> 履歷:「將核心報表查詢從 900 秒優化至 60 秒,約提速 15 倍。」
+> 提問:「他有資料庫效能調校的經驗嗎?」
 
-預期:SourcePanel 列出「員工手冊-請假」那條、距離合理,且答案正確並標註出處。
+預期:SourcePanel 列出「鼎漢國際 · 資料庫效能優化」那條、距離合理,且答案正確並標註出處。
+
+「搜尋對比」頁籤可問用詞跟履歷不同的問題(例:「他會帶團隊嗎?」「做過雲端嗎?」),觀察關鍵字欄常落空或不相關、語意欄正確撈出對應經歷。
 
 確認有吃 GPU(而非 CPU):
 
 ```bash
-ollama ps   # PROCESSOR 欄應顯示 GPU
+ollama ps   # PROCESSOR 欄應顯示 GPU(qwen2.5:7b 與 bge-m3 皆 100% GPU)
 ```
 
 ## 檢查 DB / pgvector
@@ -129,3 +144,4 @@ CREATE INDEX ON docs USING hnsw (embedding vector_cosine_ops);
 ```
 
 並用 `EXPLAIN ANALYZE` 對比建索引前後的查詢計畫。
+</content>

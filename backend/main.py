@@ -1,14 +1,16 @@
 """FastAPI 應用:路由 + CORS + 啟動時 init_db()。"""
 
+import json
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 import ollama_client
 from db import get_conn, init_db
-from rag import build_prompt, retrieve
+from rag import build_prompt, keyword_search, retrieve
 
 
 @asynccontextmanager
@@ -18,7 +20,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="RAG FAQ Demo", lifespan=lifespan)
+app = FastAPI(title="與我的履歷對話 · RAG Demo", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -65,6 +67,80 @@ def ask(req: AskRequest) -> AskResponse:
         raise HTTPException(status_code=502, detail=f"生成失敗:{e}")
 
     return AskResponse(answer=answer.strip(), sources=sources)
+
+
+@app.post("/ask/stream")
+async def ask_stream(req: AskRequest) -> StreamingResponse:
+    """與 /ask 相同的 RAG 流程,但以 SSE 串流回傳:先送 sources,再逐 token 送答案。"""
+    question = req.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question 不可為空")
+
+    # sources 在 retrieve 後就確定,可在串流答案前先送出
+    try:
+        question_vec = ollama_client.embed(question)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Embedding 失敗:{e}")
+
+    sources = retrieve(question_vec, k=4)
+    prompt = build_prompt(question, sources)
+
+    def sse(event: str, data: dict | str) -> str:
+        payload = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
+        return f"event: {event}\ndata: {payload}\n\n"
+
+    async def event_stream():
+        # 1) 先送來源,前端可立刻渲染 SourcePanel
+        yield sse("sources", {"sources": sources})
+        # 2) 逐 token 串答案
+        try:
+            async for token in ollama_client.generate_stream(prompt):
+                yield sse("token", {"text": token})
+        except Exception as e:
+            yield sse("error", {"detail": f"生成失敗:{e}"})
+            return
+        # 3) 結束事件
+        yield sse("done", {})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+class CompareSemanticSource(BaseModel):
+    content: str
+    source: str | None = None
+    distance: float
+
+
+class CompareKeywordSource(BaseModel):
+    content: str
+    source: str | None = None
+
+
+class CompareResponse(BaseModel):
+    keyword: list[CompareKeywordSource]
+    semantic: list[CompareSemanticSource]
+
+
+@app.post("/compare", response_model=CompareResponse)
+def compare(req: AskRequest) -> CompareResponse:
+    """同一問題並排比較關鍵字搜尋 vs 語意搜尋(不經 LLM,純檢索對照)。"""
+    question = req.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question 不可為空")
+
+    keyword = keyword_search(question, k=4)
+
+    try:
+        question_vec = ollama_client.embed(question)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Embedding 失敗:{e}")
+    semantic = retrieve(question_vec, k=4)
+
+    return CompareResponse(keyword=keyword, semantic=semantic)
 
 
 @app.get("/health")

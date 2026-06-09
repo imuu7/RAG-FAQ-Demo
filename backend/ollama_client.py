@@ -5,7 +5,9 @@ OLLAMA_HOST 由環境變數讀取:
 - 後端若改成原生在 WSL 跑,請設成 http://localhost:11434
 """
 
+import json
 import os
+from collections.abc import AsyncIterator
 
 import httpx
 
@@ -40,6 +42,26 @@ def generate(prompt: str) -> str:
     )
     resp.raise_for_status()
     return resp.json()["response"]
+
+
+async def generate_stream(prompt: str) -> AsyncIterator[str]:
+    """以 LLM 串流生成,逐段 yield 文字增量(Ollama NDJSON 的 response 欄)。"""
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        async with client.stream(
+            "POST",
+            f"{OLLAMA_HOST}/api/generate",
+            json={"model": GEN_MODEL, "prompt": prompt, "stream": True},
+        ) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line.strip():
+                    continue
+                chunk = json.loads(line)
+                token = chunk.get("response", "")
+                if token:
+                    yield token
+                if chunk.get("done"):
+                    break
 
 
 def ping() -> bool:

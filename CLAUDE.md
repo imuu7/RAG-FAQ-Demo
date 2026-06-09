@@ -16,7 +16,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-This repo currently contains **only the build spec** (`BUILD_PROMPT.md`, written in Chinese). None of the application code described below exists yet — it must be generated from that spec. When implementing, treat `BUILD_PROMPT.md` as the source of truth for structure, schema, and acceptance criteria. This is not yet a git repo (`git init` will be needed).
+The full stack is **implemented and verified end-to-end** — all three containers build and run, the resume corpus seeds, and the acceptance tests pass. `BUILD_PROMPT.md` (Chinese) remains the original build spec, but the live code is now the source of truth; where the two diverge, the code wins (see *embedding model* note below). This is a git repo.
+
+**Theme:** the project was retargeted from a generic enterprise-FAQ demo to **"與我的履歷對話"** — a RAG Q&A bot over 游永慶's résumé. Two showcase features were added on top of the base `/ask`: SSE streaming (`/ask/stream`) and keyword-vs-semantic search comparison (`/compare`).
+
+**Spec vs. code divergence to know about:** the updated `BUILD_PROMPT.md` reverts the embedding model to `nomic-embed-text` (768-dim), but the code deliberately stays on `bge-m3` (1024-dim) per the user's explicit decision and the earlier zh-retrieval evaluation. Don't "fix" the code to match the spec on this point.
 
 **Already provisioned on this machine (don't redo):** GPU (`nvidia-smi` → RTX 4070 SUPER, ~12282 MiB), both Ollama models pulled and Ollama listening on `0.0.0.0:11434`, Docker Engine + Compose running with the user in the `docker` group, and the spec's recommended skills installed (see *Local toolchain* below).
 
@@ -32,7 +36,9 @@ This repo currently contains **only the build spec** (`BUILD_PROMPT.md`, written
 
 ## What this project is
 
-A small but complete, locally-runnable full-stack **RAG (retrieval-augmented generation)** Q&A demo. Flow: user question → backend embeds it → pgvector cosine search over a FAQ corpus → top-k passages + question handed to a local LLM → response returns **answer + retrieved source passages with similarity scores**. The frontend shows the answer *and* its sources, proving real retrieval rather than a plain chatbot. The seed corpus is Traditional-Chinese FAQ content.
+A small but complete, locally-runnable full-stack **RAG (retrieval-augmented generation)** Q&A demo: **"與我的履歷對話"** — chat with 游永慶's résumé. Flow: user question → backend embeds it → pgvector cosine search over the **résumé corpus** → top-k passages + question handed to a local LLM → response returns **answer + retrieved source passages with similarity scores**. The frontend shows the answer *and* its sources, proving real retrieval rather than a plain chatbot. The seed corpus is Traditional-Chinese résumé/work-experience fragments (個人簡介 / 鼎漢國際 / 福興數位 / 向邑數位 / 技術棧 / 學歷).
+
+The frontend has two tabs: **問答** (streaming answer via SSE + SourcePanel) and **搜尋對比** (side-by-side keyword vs. semantic retrieval, no LLM).
 
 ## Runtime architecture (the non-obvious parts)
 
@@ -51,12 +57,16 @@ Three Docker containers (`db`, `backend`, `frontend`) run inside **WSL2**, while
 ### Data model
 Single table `docs(id serial, content text, source text, embedding vector(1024))`. Retrieval uses cosine distance operator `<=>` (`ORDER BY embedding <=> $query LIMIT k`, default k=4); smaller distance = more similar. `init_db()` runs `CREATE EXTENSION IF NOT EXISTS vector` on startup. Optional perf win: HNSW index `CREATE INDEX ON docs USING hnsw (embedding vector_cosine_ops)`.
 
-### Layout (target)
-`backend/` (FastAPI): `main.py` (routes + CORS + `init_db()` on startup), `db.py` (connection + schema via `psycopg`), `rag.py` (`retrieve()`, `build_prompt()`), `ollama_client.py` (`embed()` → `/api/embeddings`, `generate()` → `/api/generate`), `seed_data.py` (standalone-runnable corpus loader).
-`frontend/` (React + Vite + TS): `src/App.tsx`, `src/api.ts` (`AskResponse` interface, `askQuestion()`), `src/components/AskBox.tsx`, `src/components/SourcePanel.tsx`. `vite.config.ts` proxies `/api` → `http://localhost:8000` and sets `host: true` (so a Windows browser can reach it).
+### Layout
+`backend/` (FastAPI): `main.py` (routes `/ask`, `/ask/stream`, `/compare`, `/health` + CORS + `init_db()` on startup), `db.py` (connection + schema via `psycopg`), `rag.py` (`retrieve()`, `keyword_search()`, `build_prompt()`), `ollama_client.py` (`embed()` → `/api/embeddings`, `generate()` → `/api/generate`, `generate_stream()` → async NDJSON streaming), `seed_data.py` (standalone-runnable résumé corpus loader, `DOCS` list).
+`frontend/` (React + Vite + TS): `src/App.tsx` (tabs + streaming state), `src/api.ts` (`askQuestion()`, `askQuestionStream()` SSE, `compareQuestion()` + interfaces), `src/components/AskBox.tsx` (has `placeholder` prop), `src/components/SourcePanel.tsx`, `src/components/ComparePanel.tsx`. `vite.config.ts` proxies `/api` → `http://localhost:8000` and sets `host: true` (so a Windows browser can reach it).
+
+Both Dockerfiles **COPY code into the image** (no bind-mounts in compose) — after editing `backend/` or `frontend/`, rebuild with `docker compose up -d --build backend frontend`.
 
 ### API contract
-- `POST /ask {question}` → `{answer, sources: [{content, source, distance}]}`. Pipeline: `embed(question)` → `retrieve()` → `build_prompt()` → `generate()`. `build_prompt()` must instruct the LLM to answer **only from provided context, cite the source, and say it doesn't know if absent**.
+- `POST /ask {question}` → `{answer, sources: [{content, source, distance}]}`. Pipeline: `embed(question)` → `retrieve()` → `build_prompt()` → `generate()`. `build_prompt()` makes the LLM a "游永慶的履歷問答助手": answer **only from the provided résumé context, cite the source tag, and say「履歷未提及」if absent**.
+- `POST /ask/stream {question}` → SSE (`text/event-stream`). Same pipeline as `/ask` but streamed: one `sources` event first (full JSON), then per-`token` events, then `done`; `error` event on failure. Backend uses `generate_stream()`; frontend parses SSE manually via `fetch` + `ReadableStream` (EventSource can't POST).
+- `POST /compare {question}` → `{keyword: [{content, source}], semantic: [{content, source, distance}]}`. Retrieval-only, **no LLM**. Keyword path is per-character `ILIKE ANY` substring matching (Chinese has no word boundaries); semantic path reuses `retrieve()`.
 - `GET /health` → DB and Ollama connectivity status.
 
 ## Common commands
@@ -70,7 +80,7 @@ ollama pull bge-m3 && ollama pull qwen2.5:7b
 # bring up the full stack
 docker compose up --build           # add -d to detach
 
-# seed the FAQ corpus (after containers are up)
+# seed the résumé corpus (after containers are up)
 docker compose exec backend python seed_data.py
 
 # inspect DB / pgvector
@@ -87,4 +97,4 @@ Frontend: `http://localhost:5173`. Backend OpenAPI docs: `http://localhost:8000/
 
 ## Verifying RAG actually works
 
-The key acceptance test: ask a question whose **wording differs from the source text** (spec example — source says "特休假可遞延", ask "沒休完的假會不見嗎?") and confirm the correct passage is retrieved with a sensible distance and a correct answer. Use `ollama ps` and check the **PROCESSOR column shows GPU** to confirm the GPU is actually used, not CPU.
+The key acceptance test: ask a question whose **wording differs from the source text** (résumé says「將核心報表查詢從 900 秒優化至 60 秒」, ask「他有資料庫效能調校的經驗嗎?」) and confirm the correct passage (「鼎漢國際 · 資料庫效能優化」) is retrieved with a sensible distance and a correct answer. The 搜尋對比 tab is the clearest demo: ask wording-mismatched questions (「他會帶團隊嗎?」「做過雲端嗎?」) and watch keyword retrieval miss while semantic retrieval lands. Use `ollama ps` and check the **PROCESSOR column shows GPU** to confirm the GPU is actually used, not CPU.

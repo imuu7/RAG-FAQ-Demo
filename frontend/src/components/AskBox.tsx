@@ -3,9 +3,10 @@ import { useState } from "react";
 interface AskBoxProps {
   onAsk: (question: string) => void;
   loading: boolean;
+  placeholder?: string;
 }
 
-export default function AskBox({ onAsk, loading }: AskBoxProps) {
+export default function AskBox({ onAsk, loading, placeholder }: AskBoxProps) {
   const [text, setText] = useState("");
 
   const submit = (e: React.FormEvent) => {
@@ -19,7 +20,7 @@ export default function AskBox({ onAsk, loading }: AskBoxProps) {
     <form onSubmit={submit} className="askbox">
       <textarea
         className="askbox__input"
-        placeholder="輸入你的問題,例如:沒休完的假會不見嗎?"
+        placeholder={placeholder ?? "輸入你的問題…"}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
