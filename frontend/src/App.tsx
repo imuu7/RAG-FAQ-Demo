@@ -8,6 +8,7 @@ import SkeletonList from "./components/SkeletonList";
 import EmbeddingGraph from "./components/EmbeddingGraph";
 import ErrorBoundary from "./components/ErrorBoundary";
 import ThemeToggle, { type Theme } from "./components/ThemeToggle";
+import GalaxyBackground from "./components/GalaxyBackground";
 import {
   askQuestionStream,
   compareQuestion,
@@ -125,7 +126,9 @@ export default function App() {
   };
 
   return (
-    <main className="app">
+    <>
+      <GalaxyBackground />
+      <main className="app">
       <header className="masthead">
         <div className="masthead__bar">
           <span className="masthead__filing">
@@ -309,5 +312,6 @@ export default function App() {
         三容器跑在 WSL2,Ollama 走 host GPU 推論
       </footer>
     </main>
+    </>
   );
 }

@@ -38,7 +38,15 @@ The full stack is **implemented and verified end-to-end** — all three containe
 
 A small but complete, locally-runnable full-stack **RAG (retrieval-augmented generation)** Q&A demo: **"與我的履歷對話"** — chat with 游永慶's résumé. Flow: user question → backend embeds it → pgvector cosine search over the **résumé corpus** → top-k passages + question handed to a local LLM → response returns **answer + retrieved source passages with similarity scores**. The frontend shows the answer *and* its sources, proving real retrieval rather than a plain chatbot. The seed corpus is Traditional-Chinese résumé/work-experience fragments (個人簡介 / 鼎漢國際 / 福興數位 / 向邑數位 / 技術棧 / 學歷).
 
-The frontend has two tabs: **問答** (streaming answer via SSE + SourcePanel) and **搜尋對比** (side-by-side keyword vs. semantic retrieval, no LLM).
+The frontend has three tabs: **問答** (streaming answer via SSE + SourcePanel), **搜尋對比** (side-by-side keyword vs. semantic retrieval, no LLM), and **Embedding 星圖** (force-directed view of the query vs. the whole corpus in embedding space, `react-force-graph-2d`).
+
+### Visual design (dual theme, Liquid Glass)
+
+One CSS-variable design system in `src/index.css` (BEM classes, no UI framework). Cards use **Liquid Glass** (frosted blur + edge highlight) whose intensity is theme-switched via `--glass-blur` / `--glass-hi` — same classes, different feel per theme. `ThemeToggle` writes `data-theme` on `<html>` (persisted to `localStorage`; FOUC guard in `index.html`); the UI labels the modes **亮色 / 暗色**.
+- **暗色** — deep-space galaxy: pure-CSS animated nebula + parallax starfield (`GalaxyBackground`), nebula-purple/indigo palette.
+- **亮色** — "晴空玻璃": sky-blue gradient backdrop reusing the *same* `GalaxyBackground` nebula as drifting color clouds (stars hidden) so the frosted glass has something to blur; high `saturate()` + glassmorphism shadows keep the glass legible on a light background. Indigo `#4f5bd5` primary × sky-blue `#4f8ad5` accent.
+
+`GalaxyBackground` / `.galaxy` are internal code names for the background layer (used in both themes); the user-facing toggle never says "銀河". Theme also drives the 星圖 canvas palette — `EmbeddingGraph` switches its node colors on the `theme` prop, so changing a theme's primary/accent means updating that hard-coded color set too.
 
 ## Runtime architecture (the non-obvious parts)
 
@@ -59,7 +67,7 @@ Single table `docs(id serial, content text, source text, embedding vector(1024))
 
 ### Layout
 `backend/` (FastAPI): `main.py` (routes `/ask`, `/ask/stream`, `/compare`, `/health` + CORS + `init_db()` on startup), `db.py` (connection + schema via `psycopg`), `rag.py` (`retrieve()`, `keyword_search()`, `build_prompt()`), `ollama_client.py` (`embed()` → `/api/embeddings`, `generate()` → `/api/generate`, `generate_stream()` → async NDJSON streaming), `seed_data.py` (standalone-runnable résumé corpus loader, `DOCS` list).
-`frontend/` (React + Vite + TS): `src/App.tsx` (tabs + streaming state), `src/api.ts` (`askQuestion()`, `askQuestionStream()` SSE, `compareQuestion()` + interfaces), `src/components/AskBox.tsx` (has `placeholder` prop), `src/components/SourcePanel.tsx`, `src/components/ComparePanel.tsx`. `vite.config.ts` proxies `/api` → `http://localhost:8000` and sets `host: true` (so a Windows browser can reach it).
+`frontend/` (React + Vite + TS): `src/App.tsx` (tabs + streaming + theme state), `src/index.css` (single-file CSS-variable design system — see *Visual design* above), `src/api.ts` (`askQuestion()`, `askQuestionStream()` SSE, `compareQuestion()`, `fetchGraph()` + interfaces), `src/components/` — `AskBox.tsx` (has `placeholder` prop), `SourcePanel.tsx`, `ComparePanel.tsx`, `EmbeddingGraph.tsx` (force-graph 星圖, theme-aware), `GalaxyBackground.tsx` (themed background layer), `ThemeToggle.tsx`, plus `ScoreBar` / `ExampleChips` / `StatusBar` / `SkeletonList` / `ErrorBoundary`. `vite.config.ts` proxies `/api` → `http://localhost:8000` and sets `host: true` (so a Windows browser can reach it).
 
 Both Dockerfiles **COPY code into the image** (no bind-mounts in compose) — after editing `backend/` or `frontend/`, rebuild with `docker compose up -d --build backend frontend`.
 
