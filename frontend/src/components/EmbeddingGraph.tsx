@@ -88,18 +88,18 @@ export default function EmbeddingGraph({ data, theme }: EmbeddingGraphProps) {
   const C =
     theme === "dark"
       ? {
-          query: "#f0e9db",
-          hit: "#f26a48",
-          doc: "#6a6253",
-          line: "#3a342a",
-          text: "#f0e9db",
+          query: "#8b9cff",
+          hit: "#e879f9",
+          doc: "#5a6088",
+          line: "rgba(174,184,232,0.20)",
+          text: "#ecedfb",
         }
       : {
-          query: "#156b62",
-          hit: "#cf4327",
-          doc: "#b1a48d",
-          line: "#d4c9b4",
-          text: "#211c16",
+          query: "#4f5bd5",
+          hit: "#4f8ad5",
+          doc: "#a8c0d8",
+          line: "rgba(70,130,190,0.30)",
+          text: "#16314a",
         };
 
   return (

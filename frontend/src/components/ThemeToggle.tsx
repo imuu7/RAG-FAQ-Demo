@@ -11,11 +11,11 @@ export default function ThemeToggle({ theme, onToggle }: ThemeToggleProps) {
     <button
       className="theme-toggle"
       onClick={onToggle}
-      aria-label={dark ? "切換到亮色模式" : "切換到深色模式"}
-      title={dark ? "切換到亮色模式" : "切換到深色模式"}
+      aria-label={dark ? "切換到亮色模式" : "切換到暗色模式"}
+      title={dark ? "切換到亮色模式" : "切換到暗色模式"}
     >
       <span className="theme-toggle__icon">{dark ? "☀" : "☾"}</span>
-      {dark ? "亮色" : "深色"}
+      {dark ? "亮色" : "暗色"}
     </button>
   );
 }
