@@ -1,4 +1,4 @@
-// API 型別定義與呼叫,對應後端 /ask、/ask/stream、/compare 契約。
+// API 型別定義與呼叫,對應後端 /ask、/ask/stream、/compare、/health 契約。
 
 export interface Source {
   content: string;
@@ -20,6 +20,27 @@ export interface KeywordSource {
 export interface CompareResponse {
   keyword: KeywordSource[];
   semantic: Source[];
+}
+
+export interface HealthResponse {
+  status: "ok" | "degraded";
+  db: boolean;
+  ollama: boolean;
+}
+
+// Embedding 星圖:全語料節點,前 k 筆 hit=true
+export interface GraphNode {
+  id: number;
+  content: string;
+  source: string | null;
+  distance: number;
+  hit: boolean;
+}
+
+export interface GraphResponse {
+  question: string;
+  k: number;
+  nodes: GraphNode[];
 }
 
 async function parseError(resp: Response): Promise<string> {
@@ -55,6 +76,24 @@ export async function compareQuestion(
 
   if (!resp.ok) throw new Error(await parseError(resp));
   return (await resp.json()) as CompareResponse;
+}
+
+/** 查詢後端健康狀態(DB / Ollama 連線),供狀態列顯示。 */
+export async function checkHealth(): Promise<HealthResponse> {
+  const resp = await fetch("/api/health");
+  if (!resp.ok) throw new Error(await parseError(resp));
+  return (await resp.json()) as HealthResponse;
+}
+
+/** 取得 Embedding 星圖資料:query 對全語料的距離 + top-k 命中標記。 */
+export async function fetchGraph(question: string): Promise<GraphResponse> {
+  const resp = await fetch("/api/graph", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
+  if (!resp.ok) throw new Error(await parseError(resp));
+  return (await resp.json()) as GraphResponse;
 }
 
 interface StreamHandlers {
