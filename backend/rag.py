@@ -35,6 +35,30 @@ def retrieve(question_vec: list[float], k: int = 4) -> list[dict]:
     ]
 
 
+def retrieve_all(question_vec: list[float]) -> list[dict]:
+    """回傳 query 對「全部」docs 的餘弦距離(不 LIMIT),依距離排序。
+
+    供 /graph 畫全語料星雲;rows 已依距離排序,呼叫端取前 k 筆即本次命中。
+    多回一個 id 當前端節點的唯一鍵。回傳 [{id, content, source, distance}, ...]。
+    """
+    vec_literal = _to_vector_literal(question_vec)
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, content, source, embedding <=> %s::vector AS distance
+            FROM docs
+            ORDER BY distance;
+            """,
+            (vec_literal,),
+        )
+        rows = cur.fetchall()
+
+    return [
+        {"id": id_, "content": content, "source": source, "distance": float(distance)}
+        for (id_, content, source, distance) in rows
+    ]
+
+
 def keyword_search(question: str, k: int = 4) -> list[dict]:
     """傳統關鍵字搜尋:把問題拆成單字,用 ILIKE 任一比對(子字串)。
 
