@@ -91,6 +91,8 @@ curl http://localhost:8000/health
 > 改了 `backend/` 或 `frontend/` 的程式碼後,因 Dockerfile 是把程式碼 COPY 進映像(無 bind-mount),需重建:
 > `docker compose up -d --build backend frontend`。
 
+> **每次重開機後**容器不會自動恢復,需在 `~/rag-faq-demo` 目錄下再跑一次 `docker compose up -d` 把整套服務拉起來(語料已在資料庫內,不必重新 seed)。若連不上 <http://localhost:5173>(`ERR_CONNECTION_REFUSED`)通常就是這個原因。
+
 開瀏覽器(Windows 可直接連,WSL2 會自動轉發 localhost):
 
 - 前端:<http://localhost:5173>

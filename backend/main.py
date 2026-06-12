@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 import ollama_client
 from db import get_conn, init_db
-from rag import build_prompt, keyword_search, retrieve
+from rag import build_prompt, keyword_search, retrieve, retrieve_all
 
 
 @asynccontextmanager
@@ -141,6 +141,40 @@ def compare(req: AskRequest) -> CompareResponse:
     semantic = retrieve(question_vec, k=4)
 
     return CompareResponse(keyword=keyword, semantic=semantic)
+
+
+class GraphNode(BaseModel):
+    id: int
+    content: str
+    source: str | None = None
+    distance: float
+    hit: bool  # 是否為本次 top-k 命中
+
+
+class GraphResponse(BaseModel):
+    question: str
+    k: int
+    nodes: list[GraphNode]
+
+
+@app.post("/graph", response_model=GraphResponse)
+def graph(req: AskRequest, k: int = 4) -> GraphResponse:
+    """全語料語意地圖:回傳 query 對所有段落的餘弦距離,前 k 筆標記為命中(hit)。
+
+    純檢索、不經 LLM;前端用來畫「Embedding 星圖」(query 置中、全語料放射)。
+    """
+    question = req.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question 不可為空")
+
+    try:
+        question_vec = ollama_client.embed(question)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Embedding 失敗:{e}")
+
+    rows = retrieve_all(question_vec)  # 已依距離排序,前 k 筆即命中
+    nodes = [GraphNode(**row, hit=(i < k)) for i, row in enumerate(rows)]
+    return GraphResponse(question=question, k=k, nodes=nodes)
 
 
 @app.get("/health")
