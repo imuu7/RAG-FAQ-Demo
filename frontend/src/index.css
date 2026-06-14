@@ -12,7 +12,6 @@
 
   --bg: #e8f1fc;
   --surface: rgba(255, 255, 255, 0.62);
-  --surface-strong: #ffffff;
   --surface-sunken: rgba(223, 237, 250, 0.6);
   --ink: #16314a;
   --ink-2: #3f5a73;
@@ -62,7 +61,6 @@
 [data-theme="dark"] {
   --bg: #05060f;
   --surface: rgba(28, 32, 64, 0.45);
-  --surface-strong: #12152e;
   --surface-sunken: rgba(10, 12, 30, 0.5);
   --ink: #ecedfb;
   --ink-2: #b2b7dd;
@@ -99,7 +97,8 @@
 }
 
 /* ---------- Liquid Glass:玻璃材質層 ---------- */
-/* 模糊由 --glass-blur 主題化:亮色 none(實心)、深色 blur+saturate(液態玻璃) */
+/* 模糊由 --glass-blur 主題化:亮暗都是 blur+saturate(亮色更重,讓半透明雲白玻璃透出背後彩雲);
+   注意 --surface 為半透明,不支援 backdrop-filter 的瀏覽器會直接透出背景,易讀性會下降 */
 .source,
 .answer,
 .askbox__input,
@@ -115,9 +114,15 @@
 }
 
 /* 玻璃上緣高光:亮邊模擬反光,亮/深色各吃自己的 --glass-hi([data-theme] 優先級高於各 class 的 border) */
-[data-theme] :is(.source, .answer, .askbox__input, .example-card,
-    .statusbar, .compare__summary, .graph-wrap, .theme-toggle) {
+[data-theme] :is(.source, .answer, .askbox__input, .example-card, .statusbar,
+    .compare__empty, .compare__summary, .graph-wrap, .theme-toggle, .skeleton-card) {
   border-top-color: var(--glass-hi);
+}
+
+/* 最佳匹配卡片:上緣維持 accent 強調,別被上面的玻璃高光蓋掉
+   (與 [data-theme] 規則同優先級,靠後出現勝出) */
+[data-theme] .source--best {
+  border-top-color: color-mix(in srgb, var(--accent) 45%, var(--line));
 }
 
 /* ---------- base ---------- */
@@ -140,24 +145,13 @@ body {
   transition: background-color 0.4s var(--ease), color 0.4s var(--ease);
 }
 
-/* 背景氛圍:頂部雙色 glow + 全域細噪點,營造紙質深度 */
-body::before,
+/* 背景氛圍:全域細噪點,營造紙質深度(光暈統一交給 .galaxy__nebula) */
 body::after {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-}
-
-body::before {
-  background: radial-gradient(48% 42% at 14% 0%, var(--glow-1), transparent 70%),
-    radial-gradient(42% 38% at 88% 6%, var(--glow-2), transparent 72%),
-    radial-gradient(52% 46% at 62% 102%, var(--glow-3), transparent 72%);
-  transition: background 0.4s var(--ease);
-}
-
-body::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   opacity: var(--noise-opacity);
 }
@@ -168,11 +162,7 @@ body::after {
 }
 
 /* ---------- 氛圍背景:彩雲星空(galaxy,輕量純 CSS 動態) ---------- */
-/* 背景光暈統一交給 .galaxy__nebula(亮暗都顯示,各吃自己的 glow);body::before 退役 */
-body::before {
-  display: none;
-}
-
+/* 背景光暈統一交給 .galaxy__nebula(亮暗都顯示,各吃自己的 glow) */
 .galaxy {
   position: fixed;
   inset: 0;
@@ -197,6 +187,8 @@ body::before {
   background: radial-gradient(38% 32% at 22% 26%, var(--glow-1), transparent 70%),
     radial-gradient(34% 30% at 80% 18%, var(--glow-2), transparent 72%),
     radial-gradient(42% 38% at 64% 82%, var(--glow-3), transparent 72%);
+  /* 切換主題時光暈跟著淡入淡出(原 body::before 的 transition 移到這裡) */
+  transition: background 0.4s var(--ease);
   animation: nebula-drift 52s ease-in-out infinite alternate;
 }
 
