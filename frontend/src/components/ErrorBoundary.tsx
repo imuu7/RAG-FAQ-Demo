@@ -30,7 +30,7 @@ export default class ErrorBoundary extends Component<
     if (this.state.error) {
       return (
         <div
-          className="app__error"
+          className="app__error flex items-center gap-[0.55rem] mt-[1.4rem] py-[0.85rem] px-[1.1rem] bg-danger-tint text-danger rounded-[var(--radius)] text-[0.95rem]"
           style={{
             flexDirection: "column",
             alignItems: "flex-start",

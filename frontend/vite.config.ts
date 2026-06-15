@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 // 前端只打相對路徑 /api/*,由 dev server / preview server 代理到後端。
 // 代理目標可由環境變數覆寫:
@@ -18,7 +19,7 @@ const proxy = {
 
 // host: true 讓 Windows 瀏覽器能連入 WSL 內的 server
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   server: { host: true, port: 5173, proxy },
   preview: { host: true, port: 5173, proxy },
 });

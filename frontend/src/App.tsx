@@ -39,7 +39,7 @@ const HISTORY_LIMIT = 30;
 // 對話區共用的標題(empty 態垂直置中顯示)
 function Hero() {
   return (
-    <header className="hero">
+    <header className="hero mb-[1.8rem] text-center">
       <p className="eyebrow">RAG · 語意檢索問答</p>
       <h1>
         與<span className="accent">我的履歷</span>對話
@@ -69,8 +69,8 @@ function ChatPane({
 }) {
   if (!active) {
     return (
-      <section className="chat chat--empty">
-        <div className="chat__center">
+      <section className="chat chat--empty flex-1 min-w-0 flex flex-col h-full justify-center items-center overflow-y-auto">
+        <div className="chat__center w-full max-w-[720px]">
           <Hero />
           {error}
           {askbox}
@@ -80,12 +80,12 @@ function ChatPane({
     );
   }
   return (
-    <section className="chat chat--active">
-      <div className="chat__scroll">
+    <section className="chat chat--active flex-1 min-w-0 flex flex-col h-full">
+      <div className="chat__scroll flex-1 overflow-y-auto">
         {error}
         {results}
       </div>
-      <div className="chat__composer">{askbox}</div>
+      <div className="chat__composer shrink-0 border-t border-line">{askbox}</div>
     </section>
   );
 }
@@ -228,7 +228,7 @@ export default function App() {
   };
 
   const errorBox = error ? (
-    <div className="app__error">⚠ 發生錯誤:{error}</div>
+    <div className="app__error flex items-center gap-[0.55rem] mt-[1.4rem] py-[0.85rem] px-[1.1rem] bg-danger-tint text-danger rounded-[var(--radius)] text-[0.95rem]">⚠ 發生錯誤:{error}</div>
   ) : null;
 
   return (
@@ -243,7 +243,7 @@ export default function App() {
         ☰
       </button>
 
-      <div className="shell" data-sidebar-open={sidebarOpen}>
+      <div className="shell flex overflow-hidden" data-sidebar-open={sidebarOpen}>
         <div
           className="shell__backdrop"
           onClick={() => setSidebarOpen(false)}
@@ -282,21 +282,21 @@ export default function App() {
               )
             }
             results={
-              <div className="workspace">
-                <section className="answer workspace__main">
+              <div className="workspace mt-[1.9rem] grid gap-6">
+                <section className="answer workspace__main min-w-0 mt-[1.9rem] bg-surface border border-line rounded-[var(--radius-lg)] shadow-[var(--shadow)]">
                   <p className="eyebrow">生成回答</p>
-                  <p className="answer__body">
+                  <p className="answer__body m-0 text-[1.06rem] leading-[1.85] text-ink whitespace-pre-wrap [overflow-wrap:anywhere] min-h-[1.85em]">
                     {answer}
-                    {loading && <span className="answer__cursor">▍</span>}
+                    {loading && <span className="answer__cursor inline-block w-[0.5em] ml-px text-accent">▍</span>}
                   </p>
                 </section>
 
-                <div className="workspace__side">
+                <div className="workspace__side min-w-0">
                   {sources.length > 0 ? (
                     <SourcePanel sources={sources} />
                   ) : loading ? (
-                    <section className="sources">
-                      <div className="section-head">
+                    <section className="sources mt-2">
+                      <div className="section-head flex items-baseline justify-between gap-4 mt-8 mb-4">
                         <p className="eyebrow" style={{ margin: 0 }}>
                           檢索到的來源段落
                         </p>
@@ -376,16 +376,16 @@ export default function App() {
               )
             }
             results={
-              <div className="workspace workspace--graph">
-                <section className="answer workspace__main">
+              <div className="workspace workspace--graph mt-[1.9rem] grid gap-6">
+                <section className="answer workspace__main min-w-0 mt-[1.9rem] bg-surface border border-line rounded-[var(--radius-lg)] shadow-[var(--shadow)]">
                   <p className="eyebrow">生成回答</p>
-                  <p className="answer__body">
+                  <p className="answer__body m-0 text-[1.06rem] leading-[1.85] text-ink whitespace-pre-wrap [overflow-wrap:anywhere] min-h-[1.85em]">
                     {graphAnswer}
-                    {graphLoading && <span className="answer__cursor">▍</span>}
+                    {graphLoading && <span className="answer__cursor inline-block w-[0.5em] ml-px text-accent">▍</span>}
                   </p>
                 </section>
 
-                <div className="workspace__side">
+                <div className="workspace__side min-w-0">
                   {graphData ? (
                     <ErrorBoundary>
                       <EmbeddingGraph data={graphData} theme={theme} />

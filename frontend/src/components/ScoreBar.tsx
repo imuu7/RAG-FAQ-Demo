@@ -12,13 +12,13 @@ export default function ScoreBar({ distance, best = false }: ScoreBarProps) {
   const pct = Math.round(sim * 100);
 
   return (
-    <div className={`scorebar ${best ? "scorebar--best" : ""}`}>
-      <div className="scorebar__track">
-        <div className="scorebar__fill" style={{ width: `${pct}%` }} />
+    <div className={`scorebar ${best ? "scorebar--best" : ""} mt-[0.85rem]`}>
+      <div className="scorebar__track h-1.5 bg-surface-sunken rounded-full overflow-hidden">
+        <div className="scorebar__fill h-full rounded-full" style={{ width: `${pct}%` }} />
       </div>
-      <div className="scorebar__meta">
-        <span className="scorebar__pct">相似度 {pct}%</span>
-        <span className="scorebar__dist">cos 距離 {distance.toFixed(4)}</span>
+      <div className="scorebar__meta flex items-baseline justify-between mt-[0.4rem] text-[0.74rem]">
+        <span className="scorebar__pct font-bold text-ink">相似度 {pct}%</span>
+        <span className="scorebar__dist text-ink-3 tracking-[0.02em]">cos 距離 {distance.toFixed(4)}</span>
       </div>
     </div>
   );

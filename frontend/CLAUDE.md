@@ -35,6 +35,6 @@ npm run preview   # 本機預覽 build 結果
 - **提問紀錄**:`history` state 持久化到 `localStorage`(key `resume-chat-history`,以 q+tab 去重、上限 30、新的在前);三個 handler 各呼叫 `addHistory`,點紀錄用 `runOnTab(q, tab)` 切分頁並重跑。
 - `AskBox` 以 `placeholder` prop 區分各頁提示語;Enter 送出、Shift+Enter 換行;送出鈕是 `.askbox__field` 右下角的紙飛機 icon,空字串時 disabled。
 
-**樣式**:無 UI 框架、無 CSS-in-JS。全部集中在 `src/index.css`,class 採 BEM 風(`.block__element--modifier`)。改版面就改這支。
+**樣式**:**Tailwind CSS v4**(`@tailwindcss/vite`,**跳過 preflight**)+ 混合式。markup 用 utility 處理版面/間距/字體/顏色/邊框;`src/index.css` 保留 CSS 變數設計系統與 utility 無法無損表達者(玻璃 `backdrop-filter`、多層陰影、`color-mix()`、星雲漸層、全部 `@keyframes`、偽元素、`clamp()`、全部 RWD `@media`)。顏色經 `@theme inline` 把 runtime 變數對應成 Tailwind token,故 `bg-*`/`text-*`/`border-*` 隨 `[data-theme]` 自動切換、markup 無需亮暗雙值;部分 BEM class 名保留於元素上,讓玻璃群組/動畫仍命中。改樣式:可乾淨對應者改 markup utility、保留效果改 `index.css`。`.askbox__btn`/`.askbox__spinner`/`.app__error` 因跨元件共用整段留 CSS。
 
 **入口**:`main.tsx` → `App.tsx`;`index.html` 的 `<title>` 也是履歷主題,改主題時別漏。

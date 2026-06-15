@@ -29,17 +29,17 @@ export default function StatusBar() {
   };
 
   return (
-    <div className="statusbar">
-      <span className="statusbar__item">
+    <div className="statusbar flex flex-wrap items-center gap-y-2 gap-x-[1.1rem] mt-6 py-[0.7rem] px-4 bg-surface border border-line rounded-[var(--radius)] shadow-[var(--shadow-sm)] text-[0.74rem]">
+      <span className="statusbar__item inline-flex items-center gap-[0.45rem] text-ink-2 tracking-[0.03em]">
         <span className={`statusbar__dot ${dotClass(health?.db)}`} />
         pgvector {label(health?.db)}
       </span>
-      <span className="statusbar__item">
+      <span className="statusbar__item inline-flex items-center gap-[0.45rem] text-ink-2 tracking-[0.03em]">
         <span className={`statusbar__dot ${dotClass(health?.ollama)}`} />
         Ollama {label(health?.ollama)}
       </span>
-      <span className="statusbar__sep" />
-      <span className="statusbar__tag">
+      <span className="statusbar__sep flex-1 min-w-0" />
+      <span className="statusbar__tag text-ink-3 tracking-[0.04em]">
         嵌入 <b>bge-m3</b> · 生成 <b>qwen2.5:7b</b>
       </span>
     </div>

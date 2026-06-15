@@ -17,10 +17,10 @@ export default function AskBox({ onAsk, loading, placeholder }: AskBoxProps) {
   };
 
   return (
-    <form onSubmit={submit} className="askbox">
-      <div className="askbox__field">
+    <form onSubmit={submit} className="askbox flex flex-col gap-[0.8rem]">
+      <div className="askbox__field relative">
         <textarea
-          className="askbox__input"
+          className="askbox__input w-full pt-4 pr-[3.1rem] pb-4 pl-[1.05rem] text-[1.02rem] leading-[1.6] text-ink bg-surface border border-line-strong rounded-[var(--radius)] resize-y shadow-[var(--shadow-sm)] placeholder:text-ink-3 focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_var(--primary-tint)]"
           placeholder={placeholder ?? "輸入你的問題…"}
           value={text}
           onChange={(e) => setText(e.target.value)}

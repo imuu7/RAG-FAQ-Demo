@@ -1,4 +1,44 @@
 /* ============================================================
+   Tailwind CSS v4 — 跳過 preflight(只匯入 theme + utilities)
+   專案已有自有 reset(box-sizing/body/list),不需 Tailwind base normalize
+   ============================================================ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* dark: 變體改吃 [data-theme="dark"] 屬性(本專案多靠 CSS 變數自動切換,此為備用) */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* 將既有 runtime 顏色變數登記為 Tailwind token;務必 inline,使 utility 直接引用
+   var(--xxx) 本尊,主題切換時隨 [data-theme] 自動變,markup 無需寫亮暗雙值。
+   陰影/圓角/字體因與 Tailwind 預設命名空間同名,改用 arbitrary value 或保留 CSS。 */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-primary: var(--primary);
+  --color-primary-600: var(--primary-600);
+  --color-primary-tint: var(--primary-tint);
+  --color-on-primary: var(--on-primary);
+  --color-accent: var(--accent);
+  --color-accent-600: var(--accent-600);
+  --color-accent-tint: var(--accent-tint);
+  --color-danger: var(--danger);
+  --color-danger-tint: var(--danger-tint);
+  --color-faint: var(--faint);
+
+  /* 語意化斷點:僅 examples/compare/workspace 三處用到,其餘 RWD 保留原 @media */
+  --breakpoint-grid: 560px;
+  --breakpoint-cmp: 768px;
+  --breakpoint-ws: 920px;
+}
+
+/* ============================================================
    與我的履歷對話 — 設計系統
    概念:晴空玻璃(亮) × 銀河星雲(暗),天藍青 / 星雲紫藍 × Liquid Glass
    中文大標 Noto Serif TC、內文 Noto Sans TC、技術數據 Space Mono
@@ -263,40 +303,23 @@ body::after {
 }
 
 /* ---------- layout:Claude-chat 式雙欄殼層(左 Sidebar + 右對話區) ---------- */
+/* shell/chat/center/scroll/composer 的 flex 版面已轉 markup utility;
+   保留 shell 視窗高(雙 fallback)、empty/scroll/composer 的 clamp 內距、center 進場動畫、
+   composer 半透明底+模糊 */
 .shell {
-  display: flex;
   height: 100vh;
   height: 100dvh;
-  overflow: hidden;
 }
 
-/* 對話區:flex 直欄,內部自管捲動 */
-.chat {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-/* 起始態:標題/輸入框/範例垂直置中 */
 .chat--empty {
-  justify-content: center;
-  align-items: center;
-  overflow-y: auto;
   padding: clamp(1.5rem, 5vw, 3rem) clamp(1.25rem, 5vw, 3rem);
 }
 
 .chat__center {
-  width: 100%;
-  max-width: 720px;
   animation: rise 0.6s var(--ease) both;
 }
 
-/* 已提問態:上方結果捲動 + 下方貼底輸入框 */
 .chat__scroll {
-  flex: 1;
-  overflow-y: auto;
   padding: clamp(1.5rem, 4vw, 2.6rem) clamp(1.25rem, 4vw, 2.6rem);
 }
 
@@ -308,9 +331,7 @@ body::after {
 }
 
 .chat__composer {
-  flex-shrink: 0;
   padding: clamp(0.85rem, 2.4vw, 1.2rem) clamp(1.25rem, 4vw, 2.6rem);
-  border-top: 1px solid var(--line);
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -322,27 +343,16 @@ body::after {
 }
 
 /* ---------- sidebar ---------- */
+/* sidebar:版面/間距/色/邊框已轉 markup utility;保留 clamp 寬度與玻璃模糊(860px 抽屜 media 於檔末保留);
+   各互動元素保留字體、過渡與 hover/active/--active(含 color-mix)覆蓋 */
 .sidebar {
-  flex-shrink: 0;
   width: clamp(240px, 22vw, 300px);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border-right: 1px solid var(--line);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
 }
 
 .sidebar__brand {
-  flex-shrink: 0;
-  padding: 1.3rem 1.25rem 1.1rem;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  border-bottom: 1px solid var(--line);
 }
 
 .sidebar__brand b {
@@ -350,29 +360,8 @@ body::after {
   font-weight: 700;
 }
 
-/* 垂直導覽(取代原橫排 tabs) */
-.sidenav {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.9rem 0.75rem;
-}
-
 .sidenav__btn {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0.65rem 0.9rem;
-  text-align: left;
   font-family: var(--font-sans);
-  font-size: 0.98rem;
-  font-weight: 500;
-  color: var(--ink-2);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: background 0.2s var(--ease), color 0.2s var(--ease);
 }
 
@@ -388,29 +377,8 @@ body::after {
   border-color: color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
-/* 提問紀錄(中段,可捲動) */
-.sidebar__history {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 0.4rem 0.75rem 1rem;
-  border-top: 1px solid var(--line);
-}
-
-.sidebar__history-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 0.7rem 0.25rem 0.6rem;
-}
-
 .sidebar__clear {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
-  color: var(--ink-3);
-  background: none;
-  border: none;
-  cursor: pointer;
   transition: color 0.2s var(--ease);
 }
 
@@ -418,36 +386,8 @@ body::after {
   color: var(--danger);
 }
 
-.sidebar__empty {
-  margin: 0;
-  padding: 0.4rem 0.3rem;
-  font-size: 0.85rem;
-  line-height: 1.6;
-  color: var(--ink-3);
-}
-
-.history {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
 .history__item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.5rem 0.55rem;
-  text-align: left;
   font-family: var(--font-sans);
-  color: var(--ink-2);
-  background: none;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: background 0.2s var(--ease), color 0.2s var(--ease);
 }
 
@@ -457,13 +397,7 @@ body::after {
 }
 
 .history__mark {
-  flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 0.14rem 0.36rem;
-  border-radius: var(--radius-tag);
 }
 
 .history__mark--ask {
@@ -479,23 +413,6 @@ body::after {
 .history__mark--graph {
   color: var(--ink-2);
   background: var(--surface-sunken);
-}
-
-.history__q {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 0.86rem;
-}
-
-.sidebar__footer {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.8rem;
-  padding: 0.9rem 0.85rem;
-  border-top: 1px solid var(--line);
 }
 
 .sidebar__footer .statusbar {
@@ -552,11 +469,7 @@ body::after {
 }
 
 /* ---------- hero(對話區起始態的標題) ---------- */
-.hero {
-  margin-bottom: 1.8rem;
-  text-align: center;
-}
-
+/* .hero 外距/置中已轉 markup utility;h1/副標/accent 底線/eyebrow 因 clamp、偽元素、進場動畫保留於下 */
 .hero .eyebrow {
   justify-content: center;
 }
@@ -608,21 +521,9 @@ body::after {
 }
 
 /* ---------- theme toggle ---------- */
+/* theme-toggle 的版面/間距/字級/字距/色/底/邊框/圓角已轉 markup utility;保留等寬字體與過渡(hover/active 用) */
 .theme-toggle {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-height: 44px;
-  padding: 0.4rem 0.7rem;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  color: var(--ink-2);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  cursor: pointer;
   transition: border-color 0.2s var(--ease), color 0.2s var(--ease),
     transform 0.2s var(--ease);
 }
@@ -636,33 +537,12 @@ body::after {
   }
 }
 
-.theme-toggle__icon {
-  font-size: 0.95rem;
-  line-height: 1;
-}
+/* theme-toggle__icon 的字級/行高已轉 markup utility */
 
 /* ---------- 在線狀態列 ---------- */
+/* statusbar 的版面/間距/底色/邊框/圓角/陰影/字級已轉 markup utility;保留等寬字體、狀態點(含 pulse 動畫)、tag 內粗體 */
 .statusbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1.1rem;
-  margin-top: 1.5rem;
-  padding: 0.7rem 1rem;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
   font-family: var(--font-mono);
-  font-size: 0.74rem;
-}
-
-.statusbar__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: var(--ink-2);
-  letter-spacing: 0.03em;
 }
 
 .statusbar__dot {
@@ -688,80 +568,17 @@ body::after {
   animation: pulse 1.2s var(--ease) infinite;
 }
 
-.statusbar__sep {
-  flex: 1;
-  min-width: 0;
-}
-
-.statusbar__tag {
-  color: var(--ink-3);
-  letter-spacing: 0.04em;
-}
-
 .statusbar__tag b {
   color: var(--primary);
   font-weight: 700;
 }
 
 /* ---------- askbox ---------- */
-.askbox {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-}
-
-.askbox__field {
-  position: relative;
-}
-
+/* askbox:flex 容器、field 定位、input 多數樣式(含 placeholder/focus 環)已轉 markup utility;
+   input 仍在玻璃群組,保留其字體與過渡;送出鈕/ spinner 因與 ErrorBoundary 共用且含動畫,整段保留於下 */
 .askbox__input {
-  width: 100%;
-  /* 右下角預留圓形 icon 送出鈕的空間 */
-  padding: 1rem 3.1rem 1rem 1.05rem;
   font-family: var(--font-sans);
-  font-size: 1.02rem;
-  line-height: 1.6;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  resize: vertical;
-  box-shadow: var(--shadow-sm);
   transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
-}
-
-.askbox__input::placeholder {
-  color: var(--ink-3);
-}
-
-.askbox__input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-tint);
-}
-
-.askbox__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.askbox__hint {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--ink-3);
-  letter-spacing: 0.02em;
-}
-
-.askbox__hint kbd {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  padding: 0.1em 0.4em;
-  color: var(--ink-2);
-  background: var(--surface-sunken);
-  border: 1px solid var(--line);
-  border-radius: 5px;
 }
 
 /* 送出鈕:對話框右下角的圓形紙飛機 icon 鈕(右、下間距等距) */
@@ -812,46 +629,29 @@ body::after {
 }
 
 /* ---------- 空狀態 + 範例問題卡 ---------- */
+/* examples:間距已轉 utility,保留進場動畫 */
 .examples {
-  margin-top: 2.2rem;
   animation: rise 0.6s var(--ease) both;
 }
 
+/* lead:色/字級/行高已轉 utility,保留 margin(避免覆蓋 <p> 預設邊距的 utility 順序問題) */
 .examples__lead {
   margin: 0 0 1rem;
-  color: var(--ink-2);
-  font-size: 0.96rem;
-  line-height: 1.7;
 }
 
-.examples__grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.7rem;
-}
-
+/* examples__grid:base 兩欄已轉 utility,保留 ≤560 單欄切換 */
 @media (max-width: 560px) {
   .examples__grid {
     grid-template-columns: 1fr;
   }
 }
 
+/* example-card:版面/間距/字級/色/底已轉 utility;保留字體、邊框(左槓含狀態變色)、圓角、陰影、過渡與 hover 浮起 */
 .example-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.7rem;
-  min-height: 44px;
-  padding: 0.85rem 1rem;
-  text-align: left;
   font-family: var(--font-sans);
-  font-size: 0.95rem;
-  line-height: 1.5;
-  color: var(--ink);
-  background: var(--surface);
   border: 1px solid var(--line);
   border-left: 3px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  cursor: pointer;
   box-shadow: var(--shadow-sm);
   transition: border-color 0.2s var(--ease), transform 0.2s var(--ease),
     box-shadow 0.2s var(--ease);
@@ -867,16 +667,9 @@ body::after {
 
 .example-card__num {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--accent);
-  padding-top: 0.12rem;
 }
 
 .example-card__arrow {
-  margin-left: auto;
-  align-self: center;
-  color: var(--ink-3);
   transition: transform 0.2s var(--ease), color 0.2s var(--ease);
 }
 
@@ -888,86 +681,35 @@ body::after {
 }
 
 /* ---------- error ---------- */
+/* app__error:版面/間距/色/圓角/字級已轉 markup utility;保留 color-mix 邊框與進場動畫
+   (ErrorBoundary 版另以 inline style 改為直欄) */
 .app__error {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  margin-top: 1.4rem;
-  padding: 0.85rem 1.1rem;
-  background: var(--danger-tint);
-  color: var(--danger);
   border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
-  border-radius: var(--radius);
-  font-size: 0.95rem;
   animation: rise 0.4s var(--ease) both;
 }
 
 /* ---------- answer ---------- */
+/* answer 外距/底色/邊框/圓角/陰影、body 文字、cursor 多數已轉 markup utility;
+   保留 answer 內距(560 media 覆蓋)+進場動畫、cursor 閃爍動畫 */
 .answer {
-  margin-top: 1.9rem;
   padding: 1.5rem 1.6rem;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
   animation: rise 0.5s var(--ease) both;
 }
 
-.answer__body {
-  margin: 0;
-  font-size: 1.06rem;
-  line-height: 1.85;
-  color: var(--ink);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  min-height: 1.85em;
-}
-
 .answer__cursor {
-  display: inline-block;
-  width: 0.5em;
-  margin-left: 1px;
-  color: var(--accent);
   animation: blink 1s step-start infinite;
 }
 
 /* ---------- 區塊標題 ---------- */
-.section-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  margin: 2rem 0 1rem;
-}
-
+/* section-head/count、sources 容器/清單、source 卡多數樣式已轉 markup utility;
+   保留 source 的內距(560 media 覆蓋)、陰影(hover 變化)、進場動畫、過渡、hover 浮起、best 邊框(color-mix)、各 mono 字體 */
 .section-head__count {
   font-family: var(--font-mono);
-  font-size: 0.74rem;
-  color: var(--ink-3);
-  letter-spacing: 0.04em;
 }
 
 /* ---------- 來源 / 卡片 ---------- */
-.sources {
-  margin-top: 0.5rem;
-}
-
-.sources__list,
-.compare__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
 .source {
-  position: relative;
   padding: 1rem 1.1rem;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
   animation: rise 0.5s var(--ease) both;
   transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease),
@@ -986,69 +728,21 @@ body::after {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
 }
 
-.source__head {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  margin-bottom: 0.7rem;
-}
-
 .source__rank {
   font-family: var(--font-mono);
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: var(--ink-3);
 }
 
 .source__tag {
   font-family: var(--font-mono);
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--primary-600);
-  background: var(--primary-tint);
-  padding: 0.2rem 0.6rem;
-  border-radius: var(--radius-tag);
 }
 
 .source__best-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--on-primary);
-  background: var(--accent);
-  padding: 0.18rem 0.5rem;
-  border-radius: var(--radius-tag);
-}
-
-.source__content {
-  margin: 0;
-  font-size: 0.98rem;
-  line-height: 1.75;
-  color: var(--ink-2);
 }
 
 /* ---------- 相似度條(ScoreBar) ---------- */
-.scorebar {
-  margin-top: 0.85rem;
-}
-
-.scorebar__track {
-  height: 6px;
-  background: var(--surface-sunken);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
+/* scorebar:容器/軌道/間距/字級已轉 markup utility;保留漸層填色、grow 動畫、best 主題覆蓋、meta 等寬字體 */
 .scorebar__fill {
-  height: 100%;
-  border-radius: 999px;
   background: linear-gradient(90deg, var(--primary), var(--primary-600));
   transform-origin: left;
   animation: grow 0.7s var(--ease) both;
@@ -1059,34 +753,17 @@ body::after {
 }
 
 .scorebar__meta {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-top: 0.4rem;
   font-family: var(--font-mono);
-  font-size: 0.74rem;
-}
-
-.scorebar__pct {
-  font-weight: 700;
-  color: var(--ink);
 }
 
 .scorebar--best .scorebar__pct {
   color: var(--accent-600);
 }
 
-.scorebar__dist {
-  color: var(--ink-3);
-  letter-spacing: 0.02em;
-}
-
 /* ---------- 搜尋對比 ---------- */
+/* compare:版面/間距/字級/色多數已轉 markup utility;保留進場動畫、≤768 單欄、mono/serif 字體、
+   count 命中態、empty 內粗體、summary 的 margin 與跨欄定位(empty/summary 仍在玻璃群組) */
 .compare {
-  margin-top: 1.5rem;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.1rem;
   animation: rise 0.5s var(--ease) both;
 }
 
@@ -1097,39 +774,12 @@ body::after {
   }
 }
 
-.compare__col {
-  display: flex;
-  flex-direction: column;
-}
-
-.compare__head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.3rem;
-}
-
 .compare__title {
-  margin: 0;
   font-family: var(--font-serif);
-  font-weight: 700;
-  font-size: 1.1rem;
-}
-
-.compare__title--keyword {
-  color: var(--accent-600);
-}
-
-.compare__title--semantic {
-  color: var(--primary);
 }
 
 .compare__count {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.12rem 0.5rem;
-  border-radius: var(--radius-tag);
 }
 
 .compare__count--hit {
@@ -1145,22 +795,6 @@ body::after {
 .compare__hint {
   margin: 0 0 0.9rem;
   font-family: var(--font-mono);
-  font-size: 0.74rem;
-  line-height: 1.5;
-  color: var(--ink-3);
-}
-
-.compare__empty {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  padding: 1.1rem 1rem;
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: var(--ink-2);
-  background: var(--surface-sunken);
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
 }
 
 .compare__empty b {
@@ -1170,13 +804,7 @@ body::after {
 
 .compare__summary {
   margin: 1.3rem 0 0;
-  padding: 0.85rem 1.1rem;
   grid-column: 1 / -1;
-  font-size: 0.94rem;
-  line-height: 1.6;
-  color: var(--ink-2);
-  background: var(--primary-tint);
-  border-radius: var(--radius);
 }
 
 .compare__summary b {
@@ -1185,13 +813,7 @@ body::after {
 }
 
 /* ---------- skeleton(載入骨架) ---------- */
-.skeleton-card {
-  padding: 1rem 1.1rem;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-
+/* skeleton-card 的 padding/底色/邊框/圓角已轉 markup utility;backdrop-filter 由玻璃群組提供 */
 .skeleton-line {
   height: 0.7rem;
   border-radius: 999px;
@@ -1220,23 +842,13 @@ body::after {
 }
 
 /* ---------- 桌面雙欄工作區:答案與來源/星圖並排,善用橫向、減少整頁捲動 ---------- */
-.workspace {
-  margin-top: 1.9rem;
-  display: grid;
-  gap: 1.5rem;
-}
-
+/* workspace 外距/grid/gap 與 main/side 的 min-width:0(防星圖 canvas 撐出水平捲動)已轉 markup utility;
+   保留並排時 margin 歸零、≥920 雙欄/sticky(見下方 media) */
 /* 並排時改由 .workspace 的 gap 控間距,內部元素自身 margin-top 歸零 */
 .workspace > .answer,
 .workspace__side > .sources,
 .workspace__side > .graph-wrap {
   margin-top: 0;
-}
-
-/* grid item 預設 min-width:auto,會被寬內容(如星圖 canvas)撐出水平捲動;歸 0 讓其可收縮到容器內 */
-.workspace__main,
-.workspace__side {
-  min-width: 0;
 }
 
 /* ≥920px(左右有足夠空間)才並排;更窄沿用單欄堆疊,與手機 RWD 一致 */
