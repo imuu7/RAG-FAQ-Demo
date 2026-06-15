@@ -206,6 +206,44 @@ body::after {
   color: var(--primary-600);
 }
 
+/* ---------- 捲動條:與主題統一(細、圓角,呼應 Liquid Glass) ---------- */
+/* 顏色用主題變數,隨 [data-theme] 自動切換;thumb 為弱文字色、hover 加深。
+   WebKit/Blink(Chrome/Edge/Safari)用偽元素做精細樣式(圓角/hover);Firefox 走標準屬性
+   (見下方 @supports)。標準 scrollbar-* 一旦被 Chromium 讀到會壓制 ::-webkit 偽元素,
+   故標準屬性僅限 Firefox 套用。 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ink-3);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-2);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox 專用(以 -moz-appearance 偵測;Chromium/Safari 不認故不套用,才不會壓制上面的 ::-webkit) */
+@supports (-moz-appearance: none) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ink-3) transparent;
+  }
+}
+
 /* ---------- 氛圍背景:彩雲星空(galaxy,輕量純 CSS 動態) ---------- */
 /* 背景光暈統一交給 .galaxy__nebula(亮暗都顯示,各吃自己的 glow) */
 .galaxy {
