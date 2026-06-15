@@ -41,6 +41,8 @@ export default class ErrorBoundary extends Component<
           <pre
             style={{
               margin: 0,
+              maxWidth: "100%",
+              overflowX: "auto",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
               fontSize: "0.8rem",

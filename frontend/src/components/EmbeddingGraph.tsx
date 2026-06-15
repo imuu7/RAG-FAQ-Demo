@@ -18,15 +18,19 @@ interface EmbeddingGraphProps {
 export default function EmbeddingGraph({ data, theme }: EmbeddingGraphProps) {
   const fgRef = useRef<any>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(800);
-  const HEIGHT = 520;
+  // 初值 0:先不渲染圖,等 ResizeObserver 量到真實寬度再掛(消除 800→實寬的跳動)
+  const [width, setWidth] = useState(0);
+  const [height, setHeight] = useState(520);
 
-  // 量測容器寬(react-force-graph 需要明確 width/height)
+  // 量測容器寬(react-force-graph 需要明確 width/height);高度隨寬度推導
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
-      setWidth(entry.contentRect.width);
+      const w = entry.contentRect.width;
+      setWidth(w);
+      // 窄屏偏方正(360 底)、寬屏封頂 520,豎屏手機不被整塊星圖佔滿
+      setHeight(Math.round(Math.min(520, Math.max(360, w * 0.9))));
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -38,10 +42,12 @@ export default function EmbeddingGraph({ data, theme }: EmbeddingGraphProps) {
     return { dmin: Math.min(...ds), dmax: Math.max(...ds) };
   }, [data]);
 
-  // cos 距離 → 邊長(px):正規化到 70(最相似,靠中心)~380(最不相似,外圈)
+  // cos 距離 → 邊長(px):70(最相似,靠中心)~rMax(最不相似,外圈)
+  // rMax 隨容器寬度收斂,窄屏不把不相似節點甩出可視範圍
   const linkLen = (d: number) => {
     const t = dmax > dmin ? (d - dmin) / (dmax - dmin) : 0;
-    return 70 + t * 310;
+    const rMax = Math.max(180, Math.min(380, width * 0.42));
+    return 70 + t * (rMax - 70);
   };
 
   // 組 graphData:中心 query 節點(fx/fy 釘死 0,0) + 全 docs;每個 doc 連一條邊
@@ -74,16 +80,17 @@ export default function EmbeddingGraph({ data, theme }: EmbeddingGraphProps) {
     [data]
   );
 
-  // 設定力:link 距離依相似度、charge 斥力散開
+  // 設定力:link 距離依相似度、charge 斥力散開(窄屏縮小斥力,避免節點擠成一團)
   useEffect(() => {
     const fg = fgRef.current;
     if (!fg) return;
+    const charge = width < 480 ? -90 : width < 768 ? -120 : -150;
     fg.d3Force("link")?.distance((l: any) => linkLen(l.distance));
-    fg.d3Force("charge")?.strength(-150);
+    fg.d3Force("charge")?.strength(charge);
     fg.d3ReheatSimulation();
-    // dmin/dmax 變動時(換問題)重設力
+    // 換問題(graphData)或寬度改變(旋轉/斷點)時重設力
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graphData]);
+  }, [graphData, width]);
 
   const C =
     theme === "dark"
@@ -104,12 +111,20 @@ export default function EmbeddingGraph({ data, theme }: EmbeddingGraphProps) {
 
   return (
     <div ref={wrapRef} className="graph-wrap">
-      <span className="graph-hint">滾輪縮放 · 拖曳平移 · hover 看相似度</span>
+      <span className="graph-hint">
+        <span className="graph-hint__mouse">
+          滾輪縮放 · 拖曳平移 · hover 看相似度
+        </span>
+        <span className="graph-hint__touch">
+          雙指縮放 · 拖曳平移 · 點節點看相似度
+        </span>
+      </span>
 
+      {width > 0 ? (
       <ForceGraph2D
         ref={fgRef}
         width={width}
-        height={HEIGHT}
+        height={height}
         graphData={graphData as any}
         backgroundColor="rgba(0,0,0,0)"
         cooldownTicks={140}
@@ -162,18 +177,27 @@ export default function EmbeddingGraph({ data, theme }: EmbeddingGraphProps) {
           ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
           ctx.fill();
 
-          // 標籤(query 與命中節點才標,避免 17 個全標太亂)
+          // 標籤:query 永遠標;hit 的來源標籤只在較寬畫布才標(窄屏會重疊)
           if (node.kind !== "doc") {
-            const label =
-              node.kind === "query" ? "問題" : node.source ?? "";
-            ctx.font = `${12 / scale}px "Noto Sans TC", sans-serif`;
-            ctx.fillStyle = C.text;
-            ctx.textAlign = "center";
-            ctx.textBaseline = "top";
-            ctx.fillText(label, node.x, node.y + r + 4 / scale);
+            const isQuery = node.kind === "query";
+            if (isQuery || width >= 480) {
+              const label = isQuery ? "問題" : node.source ?? "";
+              const fontPx = width < 480 ? 11 : 12;
+              ctx.font = `${fontPx / scale}px "Noto Sans TC", sans-serif`;
+              ctx.fillStyle = C.text;
+              ctx.textAlign = "center";
+              ctx.textBaseline = "top";
+              ctx.fillText(label, node.x, node.y + r + 4 / scale);
+            }
           }
         }}
       />
+      ) : (
+        <div className="graph-loading" style={{ position: "absolute", inset: 0 }}>
+          <span className="askbox__spinner" />
+          正在量測畫布尺寸…
+        </div>
+      )}
 
       <div className="graph-legend">
         <span className="graph-legend__item">
